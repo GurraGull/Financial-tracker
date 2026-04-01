@@ -1,20 +1,20 @@
-# CLAUDE.md — Financial Tracker
+# CLAUDE.md — Anduril Financials
 
 This file provides guidance for AI assistants (Claude Code and others) working on this repository.
 
 ## Project Overview
 
-**Financial Tracker** is a web application for private companies to track their finances. The project is in its initial scaffolding phase — no source code exists yet beyond this documentation.
+**Anduril Financials** is a public-facing website that tracks and displays financial metrics for Anduril Industries — a private defense technology company. The site is styled after Anduril's own aesthetic: dark, stark, minimal, high-contrast.
 
-**Purpose**: Internal financial management for private companies, likely covering income/expense tracking, budgeting, reporting, and company-level financial dashboards.
+**Purpose**: Public discourse and transparency around Anduril's financial health, sourced entirely from credible public records (news, research, funding announcements).
 
 ## Repository State
 
-As of 2026-03-31, this repository contains only:
-- `README.md` — minimal project description
-- `CLAUDE.md` — this file
-
-All architecture decisions, tech stack choices, and initial scaffolding are yet to be made. When the project is bootstrapped, update this file to reflect actual choices.
+The project is scaffolded with:
+- **Framework**: Next.js 14 (App Router) with TypeScript
+- **Styling**: Tailwind CSS v4
+- **Language**: TypeScript throughout (`src/` directory)
+- **Entry point**: `src/app/page.tsx`
 
 ## Development Branch
 
@@ -26,79 +26,84 @@ git push -u origin <branch-name>
 
 Never push directly to `main` without explicit permission.
 
-## Expected Architecture (To Be Confirmed)
+## Design System (Anduril Aesthetic)
 
-Given the project description ("financial tracker for private companies"), the likely architecture will include:
+The site mirrors Anduril Industries' visual identity:
 
-- **Frontend**: React or Next.js with TypeScript
-- **Backend**: Node.js API (REST or tRPC) or Next.js API routes
-- **Database**: PostgreSQL (via Prisma ORM) for financial data integrity
-- **Auth**: NextAuth.js or similar for company-scoped access control
-- **Styling**: Tailwind CSS
+| Token | Value | Usage |
+|---|---|---|
+| Background | `#0a0a0a` | Page background |
+| Surface | `#111111` | Cards, sections |
+| Border | `#1f1f1f` | Dividers, card borders |
+| Text primary | `#ffffff` | Headlines, big numbers |
+| Text secondary | `#737373` | Labels, metadata |
+| Text muted | `#404040` | Footnotes, timestamps |
+| Accent | `#ffffff` | No color accents — numbers speak |
+| Font | Geist Sans | Clean, modern sans-serif |
 
-> Update this section once `package.json` and the tech stack are established.
+Key patterns:
+- Large numbers as the primary visual anchor (hero metrics)
+- Minimal navigation — no clutter
+- Generous whitespace between dense data sections
+- Subtle `#1f1f1f` borders for structure
+- All-caps small labels above metrics
+- Source citations inline with data
 
-## Conventions (Establish These Early)
-
-### File Structure (Proposed)
-```
-/
-├── src/
-│   ├── app/               # Next.js App Router pages
-│   ├── components/        # Reusable UI components
-│   ├── lib/               # Utility functions, DB client, helpers
-│   ├── server/            # Server-side logic, API handlers
-│   └── types/             # Shared TypeScript types
-├── prisma/                # Schema and migrations (if using Prisma)
-├── public/                # Static assets
-├── tests/                 # Test files
-├── .env.example           # Environment variable template (never commit .env)
-└── package.json
-```
-
-### Code Style
-- Use TypeScript throughout — no plain `.js` files in `src/`
-- Prefer named exports over default exports for components and utilities
-- Keep components small and focused; extract logic into custom hooks or lib functions
-- Co-locate tests with source files or place in `tests/` mirroring `src/`
-
-### Financial Data Handling
-- Always store monetary values as integers (cents/minor currency units) — never floats
-- Label all currency fields clearly (e.g., `amountCents`, `balanceCents`)
-- Include currency code alongside amounts when multi-currency support is needed
-- Validate and sanitize all financial inputs at the API boundary
-
-### Security
-- Never log sensitive financial data
-- Scope all queries to the authenticated company — never allow cross-company data access
-- Use parameterized queries; never interpolate user input into SQL
-- Store secrets in environment variables only; never hardcode credentials
-
-### Database
-- Use migrations (not `push`) for all schema changes in production
-- Never delete columns or tables directly — use soft deletes or deprecation patterns
-- Add indexes on frequently queried fields (company ID, date ranges, transaction IDs)
-
-### Git Workflow
-- Commit messages should be concise and imperative (e.g., `Add expense category model`)
-- One logical change per commit — avoid mixing refactors with feature work
-- Always run tests before pushing
-
-## Environment Variables
-
-When `.env.example` is created, document all required variables here. Expected variables will include:
+## File Structure
 
 ```
-DATABASE_URL=
-NEXTAUTH_SECRET=
-NEXTAUTH_URL=
+src/
+├── app/
+│   ├── layout.tsx          # Root layout (dark bg, Geist font)
+│   ├── page.tsx            # Homepage (hero metrics + financial statement)
+│   └── globals.css         # Tailwind base + CSS variables
+├── components/
+│   ├── MetricCard.tsx      # Big number display with label + source
+│   ├── SourceBadge.tsx     # Inline source citation chip
+│   ├── FinancialStatement.tsx  # Curated financial statement section
+│   └── Nav.tsx             # Minimal top navigation
+├── data/
+│   └── anduril.ts          # All financial data + source citations
+└── types/
+    └── financial.ts        # Shared TypeScript types
 ```
 
-Copy `.env.example` to `.env` and fill in values. Never commit `.env`.
+## Data Conventions
 
-## Commands (Update Once Package.json Exists)
+All financial data lives in `src/data/anduril.ts`. Every data point **must** carry:
 
-Once the project is bootstrapped, document the standard commands:
+```typescript
+interface MetricSource {
+  name: string;         // e.g. "Bloomberg"
+  url: string;          // Direct link to article
+  publishedDate: string; // ISO date: "2024-11-15"
+  excerpt?: string;     // Relevant quote from source
+}
+
+interface Metric {
+  label: string;
+  value: number;          // Always integers (cents for money, or raw units)
+  displayValue: string;   // Formatted: "$28.7B", "~$650M"
+  unit: string;
+  asOf: string;           // ISO date this figure was reported
+  confidence: "confirmed" | "estimated" | "rumored";
+  sources: MetricSource[];
+}
+```
+
+**Never use floats for monetary values.** Store as integer cents or millions-of-cents and format for display.
+
+## Key Domain Concepts
+
+| Term | Definition |
+|---|---|
+| **Valuation** | Post-money valuation from most recent funding round |
+| **ARR** | Annual Recurring Revenue — recurring contract value per year |
+| **Revenue** | Total revenue including one-time contracts |
+| **Total Raised** | Cumulative capital raised across all rounds |
+| **Burn Rate** | Monthly cash outflow (estimated) |
+
+## Commands
 
 ```bash
 # Install dependencies
@@ -107,39 +112,17 @@ npm install
 # Start development server
 npm run dev
 
-# Run tests
-npm test
-
 # Build for production
 npm run build
 
-# Database migrations
-npx prisma migrate dev
+# Type check
+npx tsc --noEmit
 ```
-
-## Key Domain Concepts
-
-When implementing financial tracking features, maintain consistent terminology:
-
-| Term | Definition |
-|---|---|
-| **Transaction** | A single financial event (income or expense) |
-| **Category** | Classification for transactions (e.g., Payroll, Rent, Revenue) |
-| **Account** | A financial account (bank account, credit line) belonging to a company |
-| **Company** | The top-level tenant — all data is scoped to a company |
-| **Period** | A reporting timeframe (month, quarter, fiscal year) |
-| **Budget** | A planned spend/income target for a category in a period |
-
-## Testing
-
-- Write tests for all financial calculation logic — this is critical correctness territory
-- Test API endpoints for authorization (ensure company scoping is enforced)
-- Use integration tests for database interactions involving financial data
 
 ## What NOT to Do
 
-- Do not use floating-point arithmetic for currency calculations
-- Do not expose one company's data to another company's session
-- Do not add speculative features — build only what is scoped in the current task
-- Do not skip database migrations in favor of schema pushes in production
+- Do not fabricate financial figures — every number needs a source
+- Do not use color accents that deviate from the Anduril monochrome palette
+- Do not add features beyond what is scoped (this is a single-company metrics site)
 - Do not commit `.env`, secrets, or credentials
+- Do not use floating-point arithmetic for currency values
