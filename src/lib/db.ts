@@ -30,6 +30,7 @@ function initSchema(db: Database.Database) {
       edge_score  REAL,
       edge_reason TEXT,
       notes       TEXT,
+      trade_type  TEXT NOT NULL DEFAULT 'paper' CHECK(trade_type IN ('paper','real')),
       opened_at   TEXT NOT NULL DEFAULT (datetime('now')),
       closed_at   TEXT,
       resolved    INTEGER DEFAULT 0,
@@ -45,8 +46,28 @@ function initSchema(db: Database.Database) {
       recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- One row per bankroll type; seeded on first use
+    CREATE TABLE IF NOT EXISTS bankroll (
+      id                INTEGER PRIMARY KEY,
+      trade_type        TEXT NOT NULL UNIQUE CHECK(trade_type IN ('paper','real')),
+      starting_balance  REAL NOT NULL DEFAULT 1000.0,
+      current_balance   REAL NOT NULL DEFAULT 1000.0,
+      updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    INSERT OR IGNORE INTO bankroll (trade_type, starting_balance, current_balance)
+    VALUES ('paper', 1000.0, 1000.0),
+           ('real',  1000.0, 1000.0);
+
     CREATE INDEX IF NOT EXISTS idx_trades_market ON paper_trades(market_id);
+    CREATE INDEX IF NOT EXISTS idx_trades_type   ON paper_trades(trade_type);
     CREATE INDEX IF NOT EXISTS idx_snapshots_market ON price_snapshots(market_id);
     CREATE INDEX IF NOT EXISTS idx_snapshots_time ON price_snapshots(recorded_at);
   `);
+
+  // Add trade_type column to existing DBs that were created before this migration
+  const cols = db.prepare("PRAGMA table_info(paper_trades)").all() as Array<{ name: string }>;
+  if (!cols.find((c) => c.name === "trade_type")) {
+    db.exec(`ALTER TABLE paper_trades ADD COLUMN trade_type TEXT NOT NULL DEFAULT 'paper'`);
+  }
 }

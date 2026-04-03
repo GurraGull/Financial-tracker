@@ -50,6 +50,7 @@ export interface PaperTrade {
   edge_score: number | null;
   edge_reason: string | null;
   notes: string | null;
+  trade_type: "paper" | "real";
   opened_at: string;
   closed_at: string | null;
   resolved: number;
@@ -66,6 +67,39 @@ export interface PortfolioStats {
   open_positions: number;
   closed_positions: number;
   total_trades: number;
+  cash_available: number;
+  starting_balance: number;
+  roi_pct: number;
+}
+
+export interface Bankroll {
+  id: number;
+  trade_type: "paper" | "real";
+  starting_balance: number;
+  current_balance: number;
+  updated_at: string;
+}
+
+export interface KalshiMarket {
+  ticker: string;
+  title: string;
+  yes_ask: number;
+  yes_bid: number;
+  no_ask: number;
+  no_bid: number;
+  volume: number;
+  open_interest: number;
+  status: string;
+}
+
+export interface CrossMarketMatch {
+  kalshi_ticker: string;
+  kalshi_title: string;
+  kalshi_yes_mid: number;
+  poly_yes_price: number;
+  delta_pct: number;       // kalshi - poly, positive = kalshi higher
+  poly_market_id: string;
+  poly_question: string;
 }
 
 export interface PriceSnapshot {
