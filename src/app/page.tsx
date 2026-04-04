@@ -8,9 +8,10 @@ import TradesTable from "@/components/TradesTable";
 import PortfolioStatsPanel from "@/components/PortfolioStats";
 import BankrollPanel from "@/components/BankrollPanel";
 import CrossMarketPanel from "@/components/CrossMarketPanel";
+import AutoTraderPanel from "@/components/AutoTraderPanel";
 import type { PortfolioStats, PaperTrade, Bankroll } from "@/types";
 
-type Tab = "markets" | "cross" | "paper" | "real";
+type Tab = "markets" | "cross" | "auto" | "paper" | "real";
 
 type ScoredMarket = {
   id: string;
@@ -101,9 +102,10 @@ export default function Home() {
     setShowRealModal(true);
   }
 
-  const tabs: { id: Tab; label: string; badge?: string }[] = [
+  const tabs: { id: Tab; label: string; badge?: string; accent?: string }[] = [
     { id: "markets", label: "Markets" },
     { id: "cross", label: "Cross-Market" },
+    { id: "auto", label: "Auto-Trader", accent: "violet" },
     {
       id: "paper",
       label: "Paper Portfolio",
@@ -113,6 +115,7 @@ export default function Home() {
       id: "real",
       label: "Real Trades",
       badge: realPortfolio ? String(realPortfolio.stats.open_positions) : undefined,
+      accent: "amber",
     },
   ];
 
@@ -126,25 +129,30 @@ export default function Home() {
             <span className="text-white font-semibold tracking-tight hidden sm:block">Polymarket Research</span>
           </div>
           <nav className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                  tab === t.id
-                    ? t.id === "real"
-                      ? "bg-amber-600/20 text-amber-400 border border-amber-500/30"
-                      : "bg-blue-600/20 text-blue-400 border border-blue-500/30"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                {t.id === "real" && <span className="text-amber-400 text-[10px] font-bold">$</span>}
-                {t.label}
-                {t.badge && (
-                  <span className="bg-slate-700 text-slate-300 text-xs rounded px-1">{t.badge}</span>
-                )}
-              </button>
-            ))}
+            {tabs.map((t) => {
+              const activeClass =
+                t.accent === "amber"
+                  ? "bg-amber-600/20 text-amber-400 border border-amber-500/30"
+                  : t.accent === "violet"
+                  ? "bg-violet-600/20 text-violet-400 border border-violet-500/30"
+                  : "bg-blue-600/20 text-blue-400 border border-blue-500/30";
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                    tab === t.id ? activeClass : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {t.accent === "amber" && <span className="text-amber-400 text-[10px] font-bold">$</span>}
+                  {t.accent === "violet" && <span className="text-violet-400 text-[10px]">⚡</span>}
+                  {t.label}
+                  {t.badge && (
+                    <span className="bg-slate-700 text-slate-300 text-xs rounded px-1">{t.badge}</span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
           {/* Quick "Log Real Trade" button */}
           <button
@@ -251,6 +259,11 @@ export default function Home() {
             </div>
             <CrossMarketPanel onTrade={openRealFromCross} />
           </div>
+        )}
+
+        {/* ─── AUTO-TRADER TAB ─── */}
+        {tab === "auto" && (
+          <AutoTraderPanel onTradesChanged={() => loadPortfolio("paper")} />
         )}
 
         {/* ─── PAPER PORTFOLIO TAB ─── */}

@@ -102,6 +102,17 @@ export interface CrossMarketMatch {
   poly_question: string;
 }
 
+export interface AutoTraderRun {
+  id: number;
+  ran_at: string;
+  markets_scanned: number;
+  trades_opened: number;
+  trades_closed: number;
+  cash_deployed: number;
+  cash_returned: number;
+  decisions: string; // JSON
+}
+
 export interface PriceSnapshot {
   market_id: string;
   yes_price: number;

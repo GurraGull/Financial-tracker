@@ -59,10 +59,46 @@ function initSchema(db: Database.Database) {
     VALUES ('paper', 1000.0, 1000.0),
            ('real',  1000.0, 1000.0);
 
+    -- Auto-trader settings (single row)
+    CREATE TABLE IF NOT EXISTS autotrader_settings (
+      id                      INTEGER PRIMARY KEY DEFAULT 1,
+      enabled                 INTEGER NOT NULL DEFAULT 1,
+      strategy                TEXT NOT NULL DEFAULT 'fade_extremes'
+                                CHECK(strategy IN ('fade_extremes','volume_spike','both')),
+      min_edge_score          INTEGER NOT NULL DEFAULT 55,
+      max_open_positions      INTEGER NOT NULL DEFAULT 8,
+      kelly_fraction          REAL    NOT NULL DEFAULT 0.25,
+      max_position_pct        REAL    NOT NULL DEFAULT 0.05,
+      fade_threshold_high     REAL    NOT NULL DEFAULT 0.80,
+      fade_threshold_low      REAL    NOT NULL DEFAULT 0.20,
+      regression_factor       REAL    NOT NULL DEFAULT 0.15,
+      take_profit_pct         REAL    NOT NULL DEFAULT 0.40,
+      stop_loss_pct           REAL    NOT NULL DEFAULT 0.35,
+      min_days_to_resolution  REAL    NOT NULL DEFAULT 1.0,
+      max_days_to_resolution  REAL    NOT NULL DEFAULT 30.0,
+      updated_at              TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    INSERT OR IGNORE INTO autotrader_settings (id) VALUES (1);
+
+    -- Auto-trader run log
+    CREATE TABLE IF NOT EXISTS autotrader_runs (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      ran_at            TEXT NOT NULL DEFAULT (datetime('now')),
+      markets_scanned   INTEGER NOT NULL DEFAULT 0,
+      trades_opened     INTEGER NOT NULL DEFAULT 0,
+      trades_closed     INTEGER NOT NULL DEFAULT 0,
+      cash_deployed     REAL    NOT NULL DEFAULT 0.0,
+      cash_returned     REAL    NOT NULL DEFAULT 0.0,
+      settings_snapshot TEXT,
+      decisions         TEXT    NOT NULL DEFAULT '[]'
+    );
+
     CREATE INDEX IF NOT EXISTS idx_trades_market ON paper_trades(market_id);
     CREATE INDEX IF NOT EXISTS idx_trades_type   ON paper_trades(trade_type);
     CREATE INDEX IF NOT EXISTS idx_snapshots_market ON price_snapshots(market_id);
     CREATE INDEX IF NOT EXISTS idx_snapshots_time ON price_snapshots(recorded_at);
+    CREATE INDEX IF NOT EXISTS idx_runs_time ON autotrader_runs(ran_at);
   `);
 
   // Add trade_type column to existing DBs that were created before this migration
