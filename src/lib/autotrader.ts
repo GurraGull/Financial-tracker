@@ -259,6 +259,146 @@ async function closeStalePositions(
   return decisions;
 }
 
+// ─── Learning / Adaptation ────────────────────────────────────────────────────
+
+export interface LearningInsight {
+  fade_win_rate: number | null;
+  spike_win_rate: number | null;
+  recent_stop_losses: number;
+  recent_take_profits: number;
+  avg_unrealized_pnl_pct: number;
+  adjustments: Partial<AutoTraderSettings>;
+  notes: string[];
+}
+
+type TradeRow = {
+  entry_price: number;
+  current_price: number | null;
+  exit_price: number | null;
+  status: string;
+  notes: string | null;
+};
+
+export function learnAndAdapt(db: ReturnType<typeof getDb>): LearningInsight {
+  const settings = db.prepare(
+    "SELECT * FROM autotrader_settings WHERE id = 1"
+  ).get() as AutoTraderSettings;
+
+  // ── Pull last 30 auto-trades (open + closed) ────────────────────────────
+  const recent = db.prepare(`
+    SELECT entry_price, current_price, exit_price, status, notes
+    FROM paper_trades
+    WHERE trade_type = 'paper' AND notes LIKE 'AUTO:%'
+    ORDER BY opened_at DESC
+    LIMIT 30
+  `).all() as TradeRow[];
+
+  // ── Separate by strategy signal ──────────────────────────────────────────
+  const fadeRows  = recent.filter((t) => t.notes?.includes("Fade"));
+  const spikeRows = recent.filter((t) => t.notes?.includes("spike"));
+
+  function pnlPct(t: TradeRow): number {
+    const ref  = t.status === "closed" ? (t.exit_price ?? t.entry_price) : (t.current_price ?? t.entry_price);
+    return (ref - t.entry_price) / t.entry_price;
+  }
+
+  function winRate(rows: TradeRow[]): number | null {
+    if (rows.length < 2) return null;
+    const wins = rows.filter((t) => pnlPct(t) > 0).length;
+    return wins / rows.length;
+  }
+
+  const fade_win_rate  = winRate(fadeRows);
+  const spike_win_rate = winRate(spikeRows);
+
+  // Recent stop-losses and take-profits (closed in last 10)
+  const lastClosed = recent.filter((t) => t.status === "closed").slice(0, 10);
+  const recent_stop_losses   = lastClosed.filter((t) => pnlPct(t) <= -settings.stop_loss_pct * 0.9).length;
+  const recent_take_profits  = lastClosed.filter((t) => pnlPct(t) >= settings.take_profit_pct * 0.9).length;
+
+  // Average unrealized P&L on open positions
+  const openRows = recent.filter((t) => t.status === "open");
+  const avg_unrealized_pnl_pct = openRows.length > 0
+    ? openRows.reduce((s, t) => s + pnlPct(t), 0) / openRows.length
+    : 0;
+
+  const adjustments: Partial<AutoTraderSettings> = {};
+  const notes: string[] = [];
+
+  // ── Rule 1: Too many stop-losses → be more conservative ─────────────────
+  if (recent_stop_losses >= 3) {
+    adjustments.kelly_fraction   = parseFloat(Math.max(0.10, settings.kelly_fraction - 0.05).toFixed(2));
+    adjustments.min_edge_score   = Math.min(85, settings.min_edge_score + 5);
+    notes.push(`${recent_stop_losses} recent stop-losses → tightened Kelly to ${adjustments.kelly_fraction}, edge floor to ${adjustments.min_edge_score}`);
+  }
+
+  // ── Rule 2: Strong profits flowing → slightly more aggressive ────────────
+  if (recent_take_profits >= 3 && recent_stop_losses === 0) {
+    adjustments.kelly_fraction = parseFloat(Math.min(0.50, settings.kelly_fraction + 0.05).toFixed(2));
+    notes.push(`${recent_take_profits} recent take-profits, 0 stop-losses → raised Kelly to ${adjustments.kelly_fraction}`);
+  }
+
+  // ── Rule 3: Fade strategy losing → switch ────────────────────────────────
+  if (
+    fade_win_rate !== null &&
+    fade_win_rate < 0.35 &&
+    fadeRows.length >= 4 &&
+    settings.strategy === "fade_extremes"
+  ) {
+    adjustments.strategy = "volume_spike";
+    notes.push(`Fade win rate ${(fade_win_rate * 100).toFixed(0)}% over ${fadeRows.length} trades → switching to volume_spike`);
+  }
+
+  // ── Rule 4: Spike strategy losing → switch ───────────────────────────────
+  if (
+    spike_win_rate !== null &&
+    spike_win_rate < 0.35 &&
+    spikeRows.length >= 4 &&
+    settings.strategy === "volume_spike"
+  ) {
+    adjustments.strategy = "fade_extremes";
+    notes.push(`Spike win rate ${(spike_win_rate * 100).toFixed(0)}% over ${spikeRows.length} trades → switching to fade_extremes`);
+  }
+
+  // ── Rule 5: Both winning → widen fade thresholds to catch more signals ───
+  const overallWin = winRate(lastClosed);
+  if (overallWin !== null && overallWin >= 0.65 && lastClosed.length >= 5) {
+    adjustments.fade_threshold_high = parseFloat(Math.max(0.70, settings.fade_threshold_high - 0.02).toFixed(2));
+    adjustments.fade_threshold_low  = parseFloat(Math.min(0.30, settings.fade_threshold_low  + 0.02).toFixed(2));
+    notes.push(`Win rate ${(overallWin * 100).toFixed(0)}% → widened fade thresholds to >${(adjustments.fade_threshold_high! * 100).toFixed(0)}%/<${(adjustments.fade_threshold_low! * 100).toFixed(0)}%`);
+  }
+
+  // ── Rule 6: Open positions deeply underwater → tighten stop-loss ─────────
+  if (avg_unrealized_pnl_pct < -0.15 && openRows.length >= 3) {
+    adjustments.stop_loss_pct = parseFloat(Math.max(0.15, settings.stop_loss_pct - 0.05).toFixed(2));
+    notes.push(`Avg open P&L ${(avg_unrealized_pnl_pct * 100).toFixed(1)}% → tightened stop-loss to ${(adjustments.stop_loss_pct * 100).toFixed(0)}%`);
+  }
+
+  if (notes.length === 0) {
+    notes.push("No adjustments needed — strategy is within normal parameters");
+  }
+
+  // Apply adjustments to DB
+  if (Object.keys(adjustments).length > 0) {
+    const setClauses = Object.keys(adjustments)
+      .map((k) => `${k} = @${k}`)
+      .join(", ");
+    db.prepare(
+      `UPDATE autotrader_settings SET ${setClauses}, updated_at = datetime('now') WHERE id = 1`
+    ).run(adjustments);
+  }
+
+  return {
+    fade_win_rate,
+    spike_win_rate,
+    recent_stop_losses,
+    recent_take_profits,
+    avg_unrealized_pnl_pct,
+    adjustments,
+    notes,
+  };
+}
+
 // ─── Main Run ─────────────────────────────────────────────────────────────────
 
 export async function runAutoTrader(): Promise<RunResult> {
