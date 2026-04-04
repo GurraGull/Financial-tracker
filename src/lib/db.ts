@@ -65,7 +65,7 @@ function initSchema(db: Database.Database) {
       enabled                 INTEGER NOT NULL DEFAULT 1,
       strategy                TEXT NOT NULL DEFAULT 'fade_extremes'
                                 CHECK(strategy IN ('fade_extremes','volume_spike','both')),
-      min_edge_score          INTEGER NOT NULL DEFAULT 55,
+      min_edge_score          INTEGER NOT NULL DEFAULT 20,
       max_open_positions      INTEGER NOT NULL DEFAULT 8,
       kelly_fraction          REAL    NOT NULL DEFAULT 0.25,
       max_position_pct        REAL    NOT NULL DEFAULT 0.05,
