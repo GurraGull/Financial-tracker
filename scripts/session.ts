@@ -14,7 +14,7 @@ import { getDb } from "../src/lib/db";
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const SESSION_DURATION_MS = 5 * 60 * 60 * 1000; // 5 hours
-const RUN_INTERVAL_MS     = 30 * 60 * 1000;      // every 30 minutes
+const RUN_INTERVAL_MS     = 10 * 60 * 1000;      // every 10 minutes (sim runs instantly)
 const SESSION_START       = Date.now();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ function sleep(ms: number): Promise<void> {
 // ─── Main loop ────────────────────────────────────────────────────────────────
 
 async function runSession() {
-  banner(`AUTO-TRADER SESSION STARTED  [duration: 5h, interval: 30m]`);
+  banner(`AUTO-TRADER SESSION STARTED  [duration: 5h, interval: 10m]`);
   console.log(`  Start time : ${new Date().toLocaleString()}`);
   console.log(`  End time   : ${new Date(SESSION_START + SESSION_DURATION_MS).toLocaleString()}`);
 
@@ -63,6 +63,8 @@ async function runSession() {
       continue;
     }
 
+    const modeTag = result.sim_mode ? " [SIM]" : " [LIVE]";
+    console.log(`  Mode            :${modeTag}`);
     console.log(`  Markets scanned : ${result.markets_scanned}`);
     console.log(`  Trades opened   : ${result.trades_opened}`);
     console.log(`  Trades closed   : ${result.trades_closed}`);

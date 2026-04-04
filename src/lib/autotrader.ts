@@ -25,7 +25,35 @@ import {
   computeEdgeScore,
   daysToResolution,
 } from "@/lib/polymarket";
+import {
+  getSimMarkets,
+  getSimMarketById,
+  tickSimMarkets,
+  isSimMarket,
+} from "@/lib/simulator";
 import type { PolymarketMarket } from "@/types";
+
+// ─── Market source: live or simulated ────────────────────────────────────────
+
+async function getMarkets(limit = 200): Promise<{ markets: PolymarketMarket[]; simMode: boolean }> {
+  try {
+    const markets = await fetchMarkets({ limit, active: true, closed: false, order: "volume24hr" });
+    if (markets.length > 0) return { markets, simMode: false };
+  } catch {
+    // Fall through to simulator
+  }
+  return { markets: getSimMarkets(limit), simMode: true };
+}
+
+async function getMarketById(id: string): Promise<PolymarketMarket | null> {
+  if (isSimMarket(id)) return getSimMarketById(id);
+  try {
+    const { fetchMarket } = await import("@/lib/polymarket");
+    return await fetchMarket(id);
+  } catch {
+    return null;
+  }
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +94,7 @@ export interface RunResult {
   trades_closed: number;
   cash_deployed: number;
   cash_returned: number;
+  sim_mode: boolean;
   decisions: Decision[];
 }
 
@@ -201,11 +230,14 @@ async function closeStalePositions(
   const decisions: Decision[] = [];
 
   // Fetch live prices for all open auto-trades in one batch
-  const markets = openTrades.length > 0
-    ? await fetchMarkets({ limit: 200, active: true }).catch(() => [] as PolymarketMarket[])
-    : [];
-
-  const marketMap = new Map<string, PolymarketMarket>(markets.map((m) => [m.id, m]));
+  // Build live price map for all open auto-trades
+  const marketMap = new Map<string, PolymarketMarket>();
+  await Promise.all(
+    openTrades.map(async (trade) => {
+      const m = await getMarketById(trade.market_id);
+      if (m) marketMap.set(m.id, m);
+    })
+  );
 
   for (const trade of openTrades) {
     const market = marketMap.get(trade.market_id);
@@ -415,6 +447,7 @@ export async function runAutoTrader(): Promise<RunResult> {
       trades_closed: 0,
       cash_deployed: 0,
       cash_returned: 0,
+      sim_mode: false,
       decisions: [{ market_id: "", question: "", action: "skip", reason: "Auto-trader is disabled" }],
     };
   }
@@ -443,7 +476,8 @@ export async function runAutoTrader(): Promise<RunResult> {
   }
 
   // ── 3. Scan markets ───────────────────────────────────────────────────────
-  const markets = await fetchMarkets({ limit: 200, active: true, closed: false, order: "volume24hr" });
+  const { markets, simMode } = await getMarkets(200);
+  if (simMode) tickSimMarkets(); // evolve prices before scanning
 
   // Already-open market IDs (avoid doubling up)
   const openMarketIds = new Set<string>(
@@ -565,7 +599,7 @@ export async function runAutoTrader(): Promise<RunResult> {
       (markets_scanned, trades_opened, trades_closed, cash_deployed, cash_returned, settings_snapshot, decisions)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
-    markets.length,
+    markets.length + (simMode ? 0 : 0), // same count either way
     tradesOpened,
     closeDecisions.length,
     parseFloat(cashDeployed.toFixed(2)),
@@ -580,6 +614,7 @@ export async function runAutoTrader(): Promise<RunResult> {
     trades_closed: closeDecisions.length,
     cash_deployed: cashDeployed,
     cash_returned: totalReturned,
+    sim_mode: simMode,
     decisions,
   };
 }
