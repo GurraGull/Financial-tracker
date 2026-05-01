@@ -1,5 +1,5 @@
-import PortfolioDashboard from "@/components/PortfolioDashboard";
+import Shell from '@/components/Shell';
 
 export default function Home() {
-  return <PortfolioDashboard />;
+  return <Shell />;
 }
