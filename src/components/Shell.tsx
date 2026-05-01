@@ -46,18 +46,32 @@ export default function Shell() {
       setPositions(stored.length ? stored : DEMO_POSITIONS);
       return;
     }
-    sb.auth.getSession().then(({ data }) => {
+    sb.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        setAuthChecked(true);
+        const stored = loadPositions();
+        setPositions(stored.length ? stored : DEMO_POSITIONS);
+        return;
+      }
       const u = data.session?.user ?? null;
       setUser(u);
       setAuthChecked(true);
       if (!u) setShowAuth(true);
+    }).catch(() => {
+      setAuthChecked(true);
+      const stored = loadPositions();
+      setPositions(stored.length ? stored : DEMO_POSITIONS);
     });
-    const { data: { subscription } } = sb.auth.onAuthStateChange((_ev, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (!u) { setShowAuth(true); setPositions([]); }
-    });
-    return () => subscription.unsubscribe();
+    let subscription: { unsubscribe: () => void } | null = null;
+    try {
+      const { data } = sb.auth.onAuthStateChange((_ev, session) => {
+        const u = session?.user ?? null;
+        setUser(u);
+        if (!u) { setShowAuth(true); setPositions([]); }
+      });
+      subscription = data.subscription;
+    } catch { /* ignore */ }
+    return () => subscription?.unsubscribe();
   }, []);
 
   /* load positions when user known */
