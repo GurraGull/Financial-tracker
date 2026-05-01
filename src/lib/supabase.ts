@@ -2,14 +2,13 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let _client: SupabaseClient | null = null;
 
+const URL  = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? 'https://ctayvtfjppuusffakcnm.supabase.co';
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0YXl2dGZqcHB1dXNmZmFrY25tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MDc0ODAsImV4cCI6MjA5MzE4MzQ4MH0.bbE5fxS_PGJIkUIkyvXbL0P-9Is81ygAmq2-0EDzEoI';
+
 export function getSupabase(): SupabaseClient | null {
   if (typeof window === 'undefined') return null;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  // Only initialise when a proper JWT anon key is provided (starts with eyJ)
-  if (!url || !key || !key.startsWith('eyJ')) return null;
   try {
-    if (!_client) _client = createClient(url, key);
+    if (!_client) _client = createClient(URL, ANON);
     return _client;
   } catch {
     return null;
