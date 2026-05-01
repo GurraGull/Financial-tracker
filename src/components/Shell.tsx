@@ -219,9 +219,17 @@ export default function Shell() {
           )}
           {view === 'cards' && <CardsView positions={derived} />}
           {view === 'intelligence' && <IntelligencePanel companyIds={companyIds} />}
+
+          {/* Mobile-only inline stats (replaces hidden side panel) */}
+          <div style={{ display: 'none' }} className="pm-mobile-stats">
+            <SidePanel
+              positions={derived} totalCost={totalCost} totalCurr={totalCurr} totalSec={totalSec}
+              totalPL={totalPL} totalPLpct={totalPLpct} avgMultiple={avgMultiple} gainers={gainers}
+            />
+          </div>
         </main>
 
-        {/* SIDE PANEL */}
+        {/* SIDE PANEL — desktop only */}
         <SidePanel
           positions={derived} totalCost={totalCost} totalCurr={totalCurr} totalSec={totalSec}
           totalPL={totalPL} totalPLpct={totalPLpct} avgMultiple={avgMultiple} gainers={gainers}
