@@ -1,4 +1,4 @@
-import { getCompany } from './companies';
+import { getCompany, Company } from './companies';
 
 export interface StoredPosition {
   id: string;
@@ -52,8 +52,8 @@ export function makeId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-export function derivePosition(p: StoredPosition, totalCurrVal: number): DerivedPosition {
-  const company = getCompany(p.companyId);
+export function derivePosition(p: StoredPosition, totalCurrVal: number, liveCompanies?: Company[]): DerivedPosition {
+  const company = liveCompanies ? liveCompanies.find((c) => c.id === p.companyId) : getCompany(p.companyId);
   const name = company?.name ?? p.companyId;
   const ticker = company?.ticker ?? p.companyId.toUpperCase();
   const sector = company?.sector ?? 'Private';

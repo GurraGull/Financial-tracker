@@ -5,6 +5,8 @@ import type { User } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import { dbLoad, dbUpsert, dbDelete } from '@/lib/db';
 import { StoredPosition, DerivedPosition, derivePosition, loadPositions, savePositions, DEMO_POSITIONS } from '@/lib/positions';
+import { Company, COMPANIES } from '@/lib/companies';
+import { fetchCompanies } from '@/lib/companies-db';
 import SummaryStrip from './SummaryStrip';
 import PositionsTable from './PositionsTable';
 import CardsView from './CardsView';
@@ -42,6 +44,12 @@ export default function Shell() {
   const [sort, setSort] = useState<SortState>({ key: 'currentValue', dir: -1 });
   const [modal, setModal] = useState<{ open: boolean; editing: StoredPosition | null }>({ open: false, editing: null });
   const [tick, setTick] = useState(new Date());
+  const [companies, setCompanies] = useState<Company[]>(COMPANIES);
+
+  /* fetch live company data from DB (falls back to hardcoded on error) */
+  useEffect(() => {
+    fetchCompanies().then(({ companies: rows }) => { if (rows.length) setCompanies(rows); });
+  }, []);
 
   /* auth bootstrap */
   useEffect(() => {
@@ -96,13 +104,13 @@ export default function Shell() {
   }, 0);
 
   const derived: DerivedPosition[] = useMemo(() => {
-    const all = positions.map((p) => derivePosition(p, rawTotalCurr));
+    const all = positions.map((p) => derivePosition(p, rawTotalCurr, companies));
     return all.sort((a, b) => {
       const av = a[sort.key as keyof DerivedPosition] as number;
       const bv = b[sort.key as keyof DerivedPosition] as number;
       return (bv - av) * sort.dir;
     });
-  }, [positions, sort, rawTotalCurr]);
+  }, [positions, sort, rawTotalCurr, companies]);
 
   const totalCost = derived.reduce((s, p) => s + p.costBasis, 0);
   const totalCurr = derived.reduce((s, p) => s + p.currentValue, 0);
