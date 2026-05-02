@@ -26,11 +26,17 @@ interface SortState { key: string; dir: number; }
 
 const hasSupabase = () => !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
+function setDemo(set: (v: StoredPosition[]) => void, setIs: (v: boolean) => void, rows: StoredPosition[]) {
+  if (rows.length) { set(rows); setIs(false); } else { set(DEMO_POSITIONS); setIs(true); }
+}
+
 export default function Shell() {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [positions, setPositions] = useState<StoredPosition[]>([]);
+  const [isDemo, setIsDemo] = useState(false);
+  const [demoDismissed, setDemoDismissed] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [view, setView] = useState<View>('table');
   const [sort, setSort] = useState<SortState>({ key: 'currentValue', dir: -1 });
@@ -42,15 +48,13 @@ export default function Shell() {
     const sb = getSupabase();
     if (!sb) {
       setAuthChecked(true);
-      const stored = loadPositions();
-      setPositions(stored.length ? stored : DEMO_POSITIONS);
+      setDemo(setPositions, setIsDemo, loadPositions());
       return;
     }
     sb.auth.getSession().then(({ data, error }) => {
       if (error) {
         setAuthChecked(true);
-        const stored = loadPositions();
-        setPositions(stored.length ? stored : DEMO_POSITIONS);
+        setDemo(setPositions, setIsDemo, loadPositions());
         return;
       }
       const u = data.session?.user ?? null;
@@ -59,8 +63,7 @@ export default function Shell() {
       if (!u) setShowAuth(true);
     }).catch(() => {
       setAuthChecked(true);
-      const stored = loadPositions();
-      setPositions(stored.length ? stored : DEMO_POSITIONS);
+      setDemo(setPositions, setIsDemo, loadPositions());
     });
     let subscription: { unsubscribe: () => void } | null = null;
     try {
@@ -78,10 +81,9 @@ export default function Shell() {
   useEffect(() => {
     if (!authChecked) return;
     if (user) {
-      dbLoad(user.id).then((rows) => setPositions(rows.length ? rows : DEMO_POSITIONS));
+      dbLoad(user.id).then((rows) => setDemo(setPositions, setIsDemo, rows));
     } else if (!getSupabase()) {
-      const stored = loadPositions();
-      setPositions(stored.length ? stored : DEMO_POSITIONS);
+      setDemo(setPositions, setIsDemo, loadPositions());
     }
   }, [user, authChecked]);
 
@@ -118,6 +120,7 @@ export default function Shell() {
       ? positions.map((p) => (p.id === pos.id ? pos : p))
       : [...positions, pos];
     setPositions(next);
+    setIsDemo(false);
     if (user) { await dbUpsert(user.id, pos); }
     else { savePositions(next); }
   };
@@ -138,10 +141,33 @@ export default function Shell() {
     setShowAuth(true);
   };
 
+  const handleExportCSV = () => {
+    const headers = ['Company', 'Ticker', 'Sector', 'Shares', 'Entry Price ($)', 'Entry Valuation ($M)', 'Cost Basis ($)', 'Current Value ($)', 'Secondary Value ($)', 'Unrealized P&L ($)', 'Return (%)', 'MOIC', 'Annualized IRR (%)', 'Allocation (%)', 'Days Held', 'Entry Date', 'Notes'];
+    const rows = derived.map((p) => [
+      p.name, p.ticker, p.sector,
+      p.shares, p.entrySharePrice.toFixed(2), p.entryValuationM,
+      p.costBasis.toFixed(2), p.currentValue.toFixed(2), p.secondaryValue.toFixed(2),
+      p.unrealizedPL.toFixed(2), p.unrealizedPct.toFixed(2), p.multiple.toFixed(4),
+      p.annualizedRet.toFixed(2), p.allocation.toFixed(2), p.days, p.entryDate,
+      `"${(p.notes ?? '').replace(/"/g, '""')}"`,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pm-terminal-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const ts = tick.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const dateStr = tick.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const companyIds = [...new Set(derived.map((p) => p.companyId))];
   const userInitial = user?.email?.[0]?.toUpperCase() ?? 'A';
+  const showDemoBanner = isDemo && !demoDismissed;
 
   if (!authChecked) {
     return (
@@ -197,13 +223,22 @@ export default function Shell() {
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             {!user && !hasSupabase() && <span style={{ fontSize: 9, color: 'var(--txt3)', padding: '4px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, border: '1px solid var(--div)' }}>localStorage mode</span>}
-            <button className="pm-btn">Export CSV</button>
+            <button className="pm-btn" onClick={handleExportCSV}>Export CSV</button>
             <button className="pm-btn pri" onClick={() => setModal({ open: true, editing: null })}>+ Add Position</button>
           </div>
         </header>
 
         {/* MAIN */}
         <main className="pm-main">
+          {showDemoBanner && (
+            <div className="pm-demo-banner">
+              <span>⚡ Demo mode — these are sample positions. Add your own to get started.</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="pm-btn pri" style={{ padding: '4px 12px', fontSize: 10 }} onClick={() => setModal({ open: true, editing: null })}>+ Add Position</button>
+                <button className="pm-btn" style={{ padding: '4px 10px', fontSize: 10 }} onClick={() => setDemoDismissed(true)}>✕</button>
+              </div>
+            </div>
+          )}
           <SummaryStrip
             totalCost={totalCost} totalCurr={totalCurr} totalSec={totalSec}
             totalPL={totalPL} totalPLpct={totalPLpct} avgMultiple={avgMultiple}

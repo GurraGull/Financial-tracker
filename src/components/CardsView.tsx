@@ -1,4 +1,5 @@
 import { DerivedPosition, fmtK, fmtM, fmtPct, fmtX } from '@/lib/positions';
+import CompanyLogo from './CompanyLogo';
 
 interface Props { positions: DerivedPosition[]; }
 
@@ -18,7 +19,7 @@ export default function CardsView({ positions }: Props) {
       {positions.map((p) => (
         <div key={p.id} className="pm-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div className="pm-co-av" style={{ background: p.color, width: 36, height: 36, borderRadius: 9 }}>{p.name[0]}</div>
+            <CompanyLogo name={p.name} color={p.color} domain={p.domain} size={36} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{p.name}</div>
               <div className="pm-co-ticker">{p.ticker} · {p.sector}</div>

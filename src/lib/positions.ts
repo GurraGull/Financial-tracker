@@ -18,6 +18,7 @@ export interface DerivedPosition extends StoredPosition {
   sector: string;
   color: string;
   stage: string;
+  domain: string;
   currSharePrice: number;
   secSharePrice: number;
   costBasis: number;
@@ -58,6 +59,7 @@ export function derivePosition(p: StoredPosition, totalCurrVal: number): Derived
   const sector = company?.sector ?? 'Private';
   const color = company?.color ?? '#6366F1';
   const stage = company?.stage ?? 'Pre-IPO';
+  const domain = company?.domain ?? '';
 
   const currSharePrice = (p.currentValuationM / p.entryValuationM) * p.entrySharePrice;
   const secSharePrice = (p.secondaryValuationM / p.entryValuationM) * p.entrySharePrice;
@@ -71,7 +73,7 @@ export function derivePosition(p: StoredPosition, totalCurrVal: number): Derived
   const annualizedRet = (Math.pow(multiple, 365 / days) - 1) * 100;
   const allocation = totalCurrVal > 0 ? (currentValue / totalCurrVal) * 100 : 0;
 
-  return { ...p, name, ticker, sector, color, stage, currSharePrice, secSharePrice, costBasis, currentValue, secondaryValue, unrealizedPL, unrealizedPct, multiple, days, annualizedRet, allocation };
+  return { ...p, name, ticker, sector, color, stage, domain, currSharePrice, secSharePrice, costBasis, currentValue, secondaryValue, unrealizedPL, unrealizedPct, multiple, days, annualizedRet, allocation };
 }
 
 /* formatters */
