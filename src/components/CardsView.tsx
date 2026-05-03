@@ -1,14 +1,15 @@
 import { DerivedPosition, fmtK, fmtM, fmtPct, fmtX } from '@/lib/positions';
 
-interface Props { positions: DerivedPosition[]; }
+interface Props { positions: DerivedPosition[]; onAdd: () => void; }
 
-export default function CardsView({ positions }: Props) {
+export default function CardsView({ positions, onAdd }: Props) {
   if (positions.length === 0) {
     return (
       <div className="pm-empty">
         <div className="pm-empty-icon">◈</div>
         <div className="pm-empty-title">No positions yet</div>
-        <div className="pm-empty-sub">Click "+ Add Position" to track your investments.</div>
+        <div className="pm-empty-sub">Add your first holding to start tracking your private company investments.</div>
+        <button className="pm-btn pri" style={{ marginTop: 8 }} onClick={onAdd}>+ Add Position</button>
       </div>
     );
   }

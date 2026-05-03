@@ -90,12 +90,3 @@ export const fmtK = (n: number): string => {
 export const fmtPct = (n: number): string => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
 export const fmtX = (n: number): string => `${n.toFixed(2)}x`;
 export const fmtDays = (n: number): string => n >= 365 ? `${(n / 365).toFixed(1)}y` : `${n}d`;
-
-/* demo positions so the app looks populated on first load */
-export const DEMO_POSITIONS: StoredPosition[] = [
-  { id: 'demo1', companyId: 'anthropic', shares: 800, entrySharePrice: 5125, entryValuationM: 41000, currentValuationM: 900000, secondaryValuationM: 850000, entryDate: '2022-06-10', notes: 'Series B entry.' },
-  { id: 'demo2', companyId: 'spacex', shares: 200, entrySharePrice: 68500, entryValuationM: 137000, currentValuationM: 350000, secondaryValuationM: 350000, entryDate: '2020-08-22', notes: 'Secondary via Forge.' },
-  { id: 'demo3', companyId: 'openai', shares: 500, entrySharePrice: 17200, entryValuationM: 86000, currentValuationM: 300000, secondaryValuationM: 290000, entryDate: '2021-03-15', notes: 'Series C.' },
-  { id: 'demo4', companyId: 'anduril', shares: 2000, entrySharePrice: 425, entryValuationM: 8500, currentValuationM: 28000, secondaryValuationM: 28000, entryDate: '2022-12-01', notes: 'Series D.' },
-  { id: 'demo5', companyId: 'databricks', shares: 1200, entrySharePrice: 3167, entryValuationM: 38000, currentValuationM: 62000, secondaryValuationM: 62000, entryDate: '2023-02-14', notes: 'Series H.' },
-];

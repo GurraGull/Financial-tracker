@@ -1,6 +1,7 @@
 'use client';
 
 import { DerivedPosition, fmtK, fmtM, fmtPct, fmtX, fmtDays, StoredPosition } from '@/lib/positions';
+import CompanyLogo from './CompanyLogo';
 
 interface SortState { key: string; dir: number; }
 interface Props {
@@ -11,11 +12,22 @@ interface Props {
   onSort: (key: string) => void;
   onRemove: (id: string) => void;
   onEdit: (pos: StoredPosition) => void;
+  onAdd: () => void;
 }
 
 const COLS = '180px 70px 110px 100px 110px 110px 100px 110px 80px 60px 80px 80px';
 
-export default function PositionsTable({ positions, expanded, sort, onExpand, onSort, onRemove, onEdit }: Props) {
+const TH_TIPS: Record<string, string> = {
+  'Cost Basis': 'Total capital invested: shares × entry price',
+  'Curr Value': 'Current value at latest round valuation',
+  'Sec Value': 'Value using secondary market price (Forge · Hiive · Notice)',
+  'Unreal P&L': 'Current value minus cost basis',
+  'Return': 'Unrealized P&L as % of cost basis',
+  'Mult': 'Multiple on invested capital (MOIC)',
+  'Alloc': 'This position as % of total portfolio value',
+};
+
+export default function PositionsTable({ positions, expanded, sort, onExpand, onSort, onRemove, onEdit, onAdd }: Props) {
   const si = (k: string) => sort.key === k ? (sort.dir === -1 ? ' ↓' : ' ↑') : '';
 
   if (positions.length === 0) {
@@ -24,7 +36,8 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
         <div className="pm-empty">
           <div className="pm-empty-icon">◈</div>
           <div className="pm-empty-title">No positions yet</div>
-          <div className="pm-empty-sub">Click "+ Add Position" to start tracking your private company investments.</div>
+          <div className="pm-empty-sub">Add your first holding to start tracking your private company investments.</div>
+          <button className="pm-btn pri" style={{ marginTop: 8 }} onClick={onAdd}>+ Add Position</button>
         </div>
       </div>
     );
@@ -35,16 +48,15 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
       <div className="pm-th" style={{ gridTemplateColumns: COLS }}>
         <span>Company</span>
         <span onClick={() => onSort('shares')}>Shares{si('shares')}</span>
-        <span onClick={() => onSort('costBasis')}>Cost Basis{si('costBasis')}</span>
-        <span>Entry Price</span>
-        <span onClick={() => onSort('currentValue')}>Curr Value{si('currentValue')}</span>
-        <span onClick={() => onSort('secondaryValue')}>Sec Value{si('secondaryValue')}</span>
-        <span>Curr Price</span>
-        <span onClick={() => onSort('unrealizedPL')}>Unreal P&amp;L{si('unrealizedPL')}</span>
-        <span onClick={() => onSort('unrealizedPct')}>Return{si('unrealizedPct')}</span>
-        <span onClick={() => onSort('multiple')}>Mult{si('multiple')}</span>
-        <span>Alloc</span>
-        <span>Stage</span>
+        {(['Cost Basis', 'Entry Price', 'Curr Value', 'Sec Value', 'Curr Price', 'Unreal P&L', 'Return', 'Mult', 'Alloc', 'Stage'] as const).map((h) => {
+          const key = h === 'Cost Basis' ? 'costBasis' : h === 'Curr Value' ? 'currentValue' : h === 'Sec Value' ? 'secondaryValue' : h === 'Unreal P&L' ? 'unrealizedPL' : h === 'Return' ? 'unrealizedPct' : h === 'Mult' ? 'multiple' : '';
+          const sortable = !!key;
+          return (
+            <span key={h} data-tip={TH_TIPS[h] ?? undefined} onClick={sortable ? () => onSort(key) : undefined} style={{ cursor: sortable ? 'pointer' : 'default' }}>
+              {h}{sortable ? si(key) : ''}
+            </span>
+          );
+        })}
       </div>
 
       {positions.map((p) => (
@@ -55,7 +67,7 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
             onClick={() => onExpand(p.id)}
           >
             <div className="pm-co-cell">
-              <div className="pm-co-av" style={{ background: p.color }}>{p.name[0]}</div>
+              <CompanyLogo name={p.name} color={p.color} domain={p.domain} size={32} />
               <div>
                 <div className="pm-co-name">{p.name}</div>
                 <div className="pm-co-ticker">{p.ticker}</div>
@@ -114,15 +126,20 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
                 <div className="pm-exp-title">Performance</div>
                 <div className="pm-exp-stat"><span className="pm-exp-key">Unrealized P&L</span><span className={`pm-exp-val ${p.unrealizedPL >= 0 ? 'c-pos' : 'c-neg'}`}>{p.unrealizedPL >= 0 ? '+' : ''}{fmtK(p.unrealizedPL)}</span></div>
                 <div className="pm-exp-stat"><span className="pm-exp-key">Total Return</span><span className={`pm-exp-val ${p.unrealizedPct >= 0 ? 'c-pos' : 'c-neg'}`}>{fmtPct(p.unrealizedPct)}</span></div>
-                <div className="pm-exp-stat"><span className="pm-exp-key">Multiple (MOIC)</span><span className="pm-exp-val c-acc">{fmtX(p.multiple)}</span></div>
-                <div className="pm-exp-stat"><span className="pm-exp-key">Annualized IRR</span><span className="pm-exp-val c-pos">{fmtPct(p.annualizedRet)}</span></div>
+                <div className="pm-exp-stat">
+                  <span className="pm-exp-key" data-tip="Multiple on invested capital — current value ÷ cost basis">MOIC</span>
+                  <span className="pm-exp-val c-acc">{fmtX(p.multiple)}</span>
+                </div>
+                <div className="pm-exp-stat">
+                  <span className="pm-exp-key" data-tip="Annualized return assuming same growth rate continues">Annualized IRR</span>
+                  <span className="pm-exp-val c-pos">{fmtPct(p.annualizedRet)}</span>
+                </div>
                 <div className="pm-exp-stat"><span className="pm-exp-key">Days Held</span><span className="pm-exp-val">{fmtDays(p.days)}</span></div>
                 <div className="pm-exp-stat"><span className="pm-exp-key">Portfolio Weight</span><span className="pm-exp-val">{p.allocation.toFixed(1)}%</span></div>
               </div>
               <div className="pm-exp-actions">
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--txt3)', marginBottom: 4 }}>Actions</div>
                 <button className="pm-btn" style={{ width: '100%', textAlign: 'left' }} onClick={(e) => { e.stopPropagation(); onEdit(p); }}>Edit Position</button>
-                <button className="pm-btn" style={{ width: '100%', textAlign: 'left' }}>Add Note</button>
                 <button className="pm-btn danger" style={{ width: '100%', textAlign: 'left' }} onClick={(e) => { e.stopPropagation(); onRemove(p.id); }}>Remove</button>
               </div>
             </div>
