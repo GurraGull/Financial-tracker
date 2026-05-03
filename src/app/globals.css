@@ -14,8 +14,8 @@
   --div: rgba(255,255,255,0.06); --sh: 0 8px 32px rgba(0,0,0,0.4); --sh-l: 0 20px 60px rgba(0,0,0,0.55);
 }
 
-html, body { height: 100%; overflow: hidden; }
-body { font-family: var(--font); background: var(--bg); color: var(--txt); }
+html, body { height: 100%; }
+body { font-family: var(--font); background: var(--bg); color: var(--txt); overflow-x: hidden; }
 
 /* scrollbar */
 ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--div); border-radius: 2px; }

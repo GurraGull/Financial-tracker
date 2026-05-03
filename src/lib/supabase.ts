@@ -8,7 +8,9 @@ const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsI
 export function getSupabase(): SupabaseClient | null {
   if (typeof window === 'undefined') return null;
   try {
-    if (!_client) _client = createClient(URL, ANON);
+    if (!_client) _client = createClient(URL, ANON, {
+      auth: { detectSessionInUrl: false, persistSession: true, autoRefreshToken: true },
+    });
     return _client;
   } catch {
     return null;
