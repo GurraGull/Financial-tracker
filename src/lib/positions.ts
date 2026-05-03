@@ -28,7 +28,8 @@ export interface DerivedPosition extends StoredPosition {
   forgeSharePrice: number | null;
   hiiveSharePrice: number | null;
   noticeSharePrice: number | null;
-  secondaryValue: number;       // blended secondary value (median of available prices)
+  secondarySharePrice: number | null; // median of available Forge/Hiive/Notice prices
+  secondaryValue: number;
   unrealizedPL: number;
   unrealizedPct: number;
   multiple: number;
@@ -82,12 +83,11 @@ export function derivePosition(p: StoredPosition, totalCurrVal: number, liveComp
   const hiiveSharePrice = company?.hiivePrice ?? null;
   const noticeSharePrice = company?.noticePrice ?? null;
 
-  // Blended secondary value: median of available prices, else fall back to round-based value
   const secPrices = [forgeSharePrice, hiiveSharePrice, noticeSharePrice].filter((v): v is number => v !== null);
-  const blendedSecPrice = secPrices.length > 0
+  const secondarySharePrice = secPrices.length > 0
     ? secPrices.sort((a, b) => a - b)[Math.floor(secPrices.length / 2)]
-    : currSharePrice;
-  const secondaryValue = p.shares * blendedSecPrice;
+    : null;
+  const secondaryValue = p.shares * (secondarySharePrice ?? currSharePrice);
 
   const unrealizedPL = currentValue - costBasis;
   const unrealizedPct = (unrealizedPL / costBasis) * 100;
@@ -104,7 +104,7 @@ export function derivePosition(p: StoredPosition, totalCurrVal: number, liveComp
   return {
     ...p, name, ticker, sector, color, stage, domain,
     liveValuationM, currSharePrice, costBasis, currentValue,
-    forgeSharePrice, hiiveSharePrice, noticeSharePrice, secondaryValue,
+    forgeSharePrice, hiiveSharePrice, noticeSharePrice, secondarySharePrice, secondaryValue,
     unrealizedPL, unrealizedPct, multiple, days, annualizedRet, allocation,
     carryFee, managementFeeAnnual, managementFeeTotal, netUnrealizedPL,
   };

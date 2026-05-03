@@ -15,8 +15,8 @@ interface Props {
   onAdd: () => void;
 }
 
-// Company | Shares | Cost Basis | Round Val | Curr Value | Forge | Hiive | Notice | P&L | Return
-const COLS = '190px 60px 95px 95px 100px 70px 70px 70px 100px 72px';
+// Company | Shares | Cost Basis | Round Val | Curr Value | Secondary | P&L | Return
+const COLS = '190px 60px 95px 95px 105px 95px 105px 75px';
 
 function Na() {
   return <span style={{ color: 'var(--txt3)', fontSize: 10 }}>N/A</span>;
@@ -51,9 +51,7 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
         <span onClick={() => onSort('costBasis')} style={{ cursor: 'pointer' }} data-tip="Total capital deployed">Cost Basis{si('costBasis')}</span>
         <span data-tip="Current company round valuation from database">Round Val</span>
         <span onClick={() => onSort('currentValue')} style={{ cursor: 'pointer' }} data-tip="Your shares valued at current round">Curr Value{si('currentValue')}</span>
-        <span data-tip="Latest Forge secondary market share price">Forge</span>
-        <span data-tip="Latest Hiive secondary market share price">Hiive</span>
-        <span data-tip="Latest Notice secondary market share price">Notice</span>
+        <span data-tip="Median of Forge · Hiive · Notice secondary market prices">Secondary</span>
         <span onClick={() => onSort('unrealizedPL')} style={{ cursor: 'pointer' }} data-tip="Unrealized gain / loss">P&amp;L{si('unrealizedPL')}</span>
         <span onClick={() => onSort('unrealizedPct')} style={{ cursor: 'pointer' }} data-tip="Return as % of cost basis">Return{si('unrealizedPct')}</span>
       </div>
@@ -76,9 +74,7 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
             <div className="pm-cell">{fmtK(p.costBasis)}</div>
             <div className="pm-cell dim">{fmtM(p.liveValuationM)}</div>
             <div className="pm-cell lg" style={{ color: p.color }}>{fmtK(p.currentValue)}</div>
-            <div className="pm-cell dim"><SecPrice price={p.forgeSharePrice} /></div>
-            <div className="pm-cell dim"><SecPrice price={p.hiiveSharePrice} /></div>
-            <div className="pm-cell dim"><SecPrice price={p.noticeSharePrice} /></div>
+            <div className="pm-cell dim"><SecPrice price={p.secondarySharePrice} /></div>
             <div className={`pm-cell ${p.unrealizedPL >= 0 ? 'c-pos' : 'c-neg'}`}>
               {p.unrealizedPL >= 0 ? '+' : ''}{fmtK(p.unrealizedPL)}
             </div>
