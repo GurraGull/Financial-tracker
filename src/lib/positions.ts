@@ -6,12 +6,12 @@ export interface StoredPosition {
   shares: number;
   entrySharePrice: number;
   entryValuationM: number;
-  currentValuationM: number;
-  secondaryValuationM: number;
+  currentValuationM: number;   // snapshot at time of save; live data overrides in derivePosition
+  secondaryValuationM: number; // kept for legacy; derivePosition prefers live company prices
   entryDate: string;
   notes: string;
-  carryPct?: number;        // e.g. 20 → 20% carry on gains
-  managementFeePct?: number; // e.g. 2 → 2% / year of cost basis
+  carryPct?: number;
+  managementFeePct?: number;
 }
 
 export interface DerivedPosition extends StoredPosition {
@@ -21,11 +21,14 @@ export interface DerivedPosition extends StoredPosition {
   color: string;
   stage: string;
   domain: string;
+  liveValuationM: number;       // live company round valuation (source of truth)
   currSharePrice: number;
-  secSharePrice: number;
   costBasis: number;
   currentValue: number;
-  secondaryValue: number;
+  forgeSharePrice: number | null;
+  hiiveSharePrice: number | null;
+  noticeSharePrice: number | null;
+  secondaryValue: number;       // blended secondary value (median of available prices)
   unrealizedPL: number;
   unrealizedPct: number;
   multiple: number;
@@ -67,11 +70,25 @@ export function derivePosition(p: StoredPosition, totalCurrVal: number, liveComp
   const stage = company?.stage ?? 'Pre-IPO';
   const domain = company?.domain ?? '';
 
-  const currSharePrice = (p.currentValuationM / p.entryValuationM) * p.entrySharePrice;
-  const secSharePrice = (p.secondaryValuationM / p.entryValuationM) * p.entrySharePrice;
+  // Prefer live DB valuation over stored snapshot
+  const liveValuationM = company?.currentValuationM ?? p.currentValuationM;
+
+  const currSharePrice = (liveValuationM / p.entryValuationM) * p.entrySharePrice;
   const costBasis = p.shares * p.entrySharePrice;
   const currentValue = p.shares * currSharePrice;
-  const secondaryValue = p.shares * secSharePrice;
+
+  // Individual secondary market prices (null = not yet available)
+  const forgeSharePrice = company?.forgePrice ?? null;
+  const hiiveSharePrice = company?.hiivePrice ?? null;
+  const noticeSharePrice = company?.noticePrice ?? null;
+
+  // Blended secondary value: median of available prices, else fall back to round-based value
+  const secPrices = [forgeSharePrice, hiiveSharePrice, noticeSharePrice].filter((v): v is number => v !== null);
+  const blendedSecPrice = secPrices.length > 0
+    ? secPrices.sort((a, b) => a - b)[Math.floor(secPrices.length / 2)]
+    : currSharePrice;
+  const secondaryValue = p.shares * blendedSecPrice;
+
   const unrealizedPL = currentValue - costBasis;
   const unrealizedPct = (unrealizedPL / costBasis) * 100;
   const multiple = currentValue / costBasis;
@@ -86,7 +103,8 @@ export function derivePosition(p: StoredPosition, totalCurrVal: number, liveComp
 
   return {
     ...p, name, ticker, sector, color, stage, domain,
-    currSharePrice, secSharePrice, costBasis, currentValue, secondaryValue,
+    liveValuationM, currSharePrice, costBasis, currentValue,
+    forgeSharePrice, hiiveSharePrice, noticeSharePrice, secondaryValue,
     unrealizedPL, unrealizedPct, multiple, days, annualizedRet, allocation,
     carryFee, managementFeeAnnual, managementFeeTotal, netUnrealizedPL,
   };

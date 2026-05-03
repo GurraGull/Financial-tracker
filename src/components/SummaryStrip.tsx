@@ -12,12 +12,13 @@ interface Props {
 }
 
 export default function SummaryStrip({ totalCost, totalCurr, totalSec, totalPL, totalPLpct, avgMultiple, gainers, total }: Props) {
+  const hasSecondary = totalSec > 0 && totalSec !== totalCurr;
   const stats = [
     { label: 'Total Portfolio Value', val: fmtM(totalCurr), sub: 'Marked to current round', cls: '' },
     { label: 'Total Cost Basis', val: fmtM(totalCost), sub: 'Capital deployed', cls: '' },
-    { label: 'Unrealized Gain', val: fmtM(totalPL), sub: fmtPct(totalPLpct) + ' return', cls: 'c-pos' },
+    { label: 'Unrealized Gain', val: fmtM(totalPL), sub: fmtPct(totalPLpct) + ' return', cls: totalPL >= 0 ? 'c-pos' : 'c-neg' },
     { label: 'Portfolio Multiple', val: fmtX(avgMultiple), sub: `${gainers}/${total} positions up`, cls: 'c-acc' },
-    { label: 'Secondary Value', val: fmtM(totalSec), sub: 'Secondary market basis', cls: '' },
+    ...(hasSecondary ? [{ label: 'Secondary Value', val: fmtM(totalSec), sub: 'Blended Forge · Hiive · Notice', cls: '' }] : []),
   ];
   return (
     <div className="pm-strip pm-fu">
