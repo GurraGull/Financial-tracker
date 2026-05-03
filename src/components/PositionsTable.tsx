@@ -15,17 +15,7 @@ interface Props {
   onAdd: () => void;
 }
 
-const COLS = '180px 70px 110px 100px 110px 110px 100px 110px 80px 60px 80px 80px';
-
-const TH_TIPS: Record<string, string> = {
-  'Cost Basis': 'Total capital invested: shares × entry price',
-  'Curr Value': 'Current value at latest round valuation',
-  'Sec Value': 'Value using secondary market price (Forge · Hiive · Notice)',
-  'Unreal P&L': 'Current value minus cost basis',
-  'Return': 'Unrealized P&L as % of cost basis',
-  'Mult': 'Multiple on invested capital (MOIC)',
-  'Alloc': 'This position as % of total portfolio value',
-};
+const COLS = '200px 110px 110px 80px 70px 110px 80px';
 
 export default function PositionsTable({ positions, expanded, sort, onExpand, onSort, onRemove, onEdit, onAdd }: Props) {
   const si = (k: string) => sort.key === k ? (sort.dir === -1 ? ' ↓' : ' ↑') : '';
@@ -47,16 +37,12 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
     <div className="pm-tbl pm-fu" style={{ animationDelay: '0.04s' }}>
       <div className="pm-th" style={{ gridTemplateColumns: COLS }}>
         <span>Company</span>
-        <span onClick={() => onSort('shares')}>Shares{si('shares')}</span>
-        {(['Cost Basis', 'Entry Price', 'Curr Value', 'Sec Value', 'Curr Price', 'Unreal P&L', 'Return', 'Mult', 'Alloc', 'Stage'] as const).map((h) => {
-          const key = h === 'Cost Basis' ? 'costBasis' : h === 'Curr Value' ? 'currentValue' : h === 'Sec Value' ? 'secondaryValue' : h === 'Unreal P&L' ? 'unrealizedPL' : h === 'Return' ? 'unrealizedPct' : h === 'Mult' ? 'multiple' : '';
-          const sortable = !!key;
-          return (
-            <span key={h} data-tip={TH_TIPS[h] ?? undefined} onClick={sortable ? () => onSort(key) : undefined} style={{ cursor: sortable ? 'pointer' : 'default' }}>
-              {h}{sortable ? si(key) : ''}
-            </span>
-          );
-        })}
+        <span onClick={() => onSort('costBasis')} style={{ cursor: 'pointer' }}>Cost Basis{si('costBasis')}</span>
+        <span onClick={() => onSort('currentValue')} style={{ cursor: 'pointer' }}>Curr Value{si('currentValue')}</span>
+        <span onClick={() => onSort('unrealizedPct')} style={{ cursor: 'pointer' }} data-tip="Unrealized P&L as % of cost basis">Return{si('unrealizedPct')}</span>
+        <span onClick={() => onSort('multiple')} style={{ cursor: 'pointer' }} data-tip="Multiple on invested capital">MOIC{si('multiple')}</span>
+        <span data-tip="This position as % of total portfolio value">Allocation</span>
+        <span>Stage</span>
       </div>
 
       {positions.map((p) => (
@@ -70,18 +56,11 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
               <CompanyLogo name={p.name} color={p.color} domain={p.domain} size={32} />
               <div>
                 <div className="pm-co-name">{p.name}</div>
-                <div className="pm-co-ticker">{p.ticker}</div>
+                <div className="pm-co-ticker">{p.ticker} · {p.sector}</div>
               </div>
             </div>
-            <div className="pm-cell">{p.shares.toLocaleString()}</div>
             <div className="pm-cell">{fmtK(p.costBasis)}</div>
-            <div className="pm-cell dim">{fmtK(p.entrySharePrice)}</div>
             <div className="pm-cell lg" style={{ color: p.color }}>{fmtK(p.currentValue)}</div>
-            <div className="pm-cell dim">{fmtK(p.secondaryValue)}</div>
-            <div className="pm-cell">{fmtK(p.currSharePrice)}</div>
-            <div className={`pm-cell ${p.unrealizedPL >= 0 ? 'c-pos' : 'c-neg'}`}>
-              {p.unrealizedPL >= 0 ? '+' : ''}{fmtK(p.unrealizedPL)}
-            </div>
             <div className={`pm-cell ${p.unrealizedPct >= 0 ? 'c-pos' : 'c-neg'}`}>{fmtPct(p.unrealizedPct)}</div>
             <div className="pm-cell c-acc">{fmtX(p.multiple)}</div>
             <div className="pm-alloc-wrap">
@@ -127,7 +106,7 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
                 <div className="pm-exp-stat"><span className="pm-exp-key">Unrealized P&L</span><span className={`pm-exp-val ${p.unrealizedPL >= 0 ? 'c-pos' : 'c-neg'}`}>{p.unrealizedPL >= 0 ? '+' : ''}{fmtK(p.unrealizedPL)}</span></div>
                 <div className="pm-exp-stat"><span className="pm-exp-key">Total Return</span><span className={`pm-exp-val ${p.unrealizedPct >= 0 ? 'c-pos' : 'c-neg'}`}>{fmtPct(p.unrealizedPct)}</span></div>
                 <div className="pm-exp-stat">
-                  <span className="pm-exp-key" data-tip="Multiple on invested capital — current value ÷ cost basis">MOIC</span>
+                  <span className="pm-exp-key" data-tip="Multiple on invested capital">MOIC</span>
                   <span className="pm-exp-val c-acc">{fmtX(p.multiple)}</span>
                 </div>
                 <div className="pm-exp-stat">
@@ -137,6 +116,28 @@ export default function PositionsTable({ positions, expanded, sort, onExpand, on
                 <div className="pm-exp-stat"><span className="pm-exp-key">Days Held</span><span className="pm-exp-val">{fmtDays(p.days)}</span></div>
                 <div className="pm-exp-stat"><span className="pm-exp-key">Portfolio Weight</span><span className="pm-exp-val">{p.allocation.toFixed(1)}%</span></div>
               </div>
+              {(p.carryPct || p.managementFeePct) ? (
+                <div>
+                  <div className="pm-exp-title">Fund Fees</div>
+                  {p.carryPct ? (
+                    <>
+                      <div className="pm-exp-stat"><span className="pm-exp-key">Carry Rate</span><span className="pm-exp-val">{p.carryPct}%</span></div>
+                      <div className="pm-exp-stat"><span className="pm-exp-key">Carry Fee</span><span className="pm-exp-val c-neg">−{fmtK(p.carryFee)}</span></div>
+                    </>
+                  ) : null}
+                  {p.managementFeePct ? (
+                    <>
+                      <div className="pm-exp-stat"><span className="pm-exp-key">Mgmt Fee Rate</span><span className="pm-exp-val">{p.managementFeePct}% / yr</span></div>
+                      <div className="pm-exp-stat"><span className="pm-exp-key">Annual Mgmt Fee</span><span className="pm-exp-val c-neg">−{fmtK(p.managementFeeAnnual)}</span></div>
+                      <div className="pm-exp-stat"><span className="pm-exp-key">Total Mgmt Fees</span><span className="pm-exp-val c-neg">−{fmtK(p.managementFeeTotal)}</span></div>
+                    </>
+                  ) : null}
+                  <div className="pm-exp-stat" style={{ marginTop: 4, paddingTop: 4, borderTop: '1px solid var(--div)' }}>
+                    <span className="pm-exp-key">Net P&L (after fees)</span>
+                    <span className={`pm-exp-val ${p.netUnrealizedPL >= 0 ? 'c-pos' : 'c-neg'}`}>{p.netUnrealizedPL >= 0 ? '+' : ''}{fmtK(p.netUnrealizedPL)}</span>
+                  </div>
+                </div>
+              ) : null}
               <div className="pm-exp-actions">
                 <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--txt3)', marginBottom: 4 }}>Actions</div>
                 <button className="pm-btn" style={{ width: '100%', textAlign: 'left' }} onClick={(e) => { e.stopPropagation(); onEdit(p); }}>Edit Position</button>

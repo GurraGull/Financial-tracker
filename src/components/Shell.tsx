@@ -13,6 +13,7 @@ import CardsView from './CardsView';
 import SidePanel from './SidePanel';
 import AddPositionModal from './AddPositionModal';
 import IntelligencePanel from './IntelligencePanel';
+import ChartsView from './ChartsView';
 import AuthModal from './AuthModal';
 
 const NAV = [
@@ -23,7 +24,7 @@ const NAV = [
   { icon: '◉', label: 'Intelligence' },
 ];
 
-type View = 'table' | 'cards' | 'intelligence';
+type View = 'table' | 'cards' | 'charts' | 'intelligence';
 interface SortState { key: string; dir: number; }
 
 const hasSupabase = () => !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -218,7 +219,7 @@ export default function Shell() {
           </div>
           <div className="pm-tb-div" />
           <div className="pm-vtabs">
-            {([['table', 'Table'], ['cards', 'Cards'], ['intelligence', 'Intelligence']] as [View, string][]).map(([k, l]) => (
+            {([['table', 'Table'], ['cards', 'Cards'], ['charts', 'Charts'], ['intelligence', 'Intelligence']] as [View, string][]).map(([k, l]) => (
               <div key={k} className={`pm-vtab ${view === k ? 'on' : ''}`} onClick={() => setView(k)}>{l}</div>
             ))}
           </div>
@@ -248,6 +249,7 @@ export default function Shell() {
             />
           )}
           {view === 'cards' && <CardsView positions={derived} onAdd={() => setModal({ open: true, editing: null })} />}
+          {view === 'charts' && <ChartsView positions={derived} />}
           {view === 'intelligence' && <IntelligencePanel companyIds={companyIds} />}
 
           <div style={{ display: 'none' }} className="pm-mobile-stats">

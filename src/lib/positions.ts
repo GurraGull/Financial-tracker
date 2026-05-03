@@ -1,4 +1,4 @@
-import { getCompany } from './companies';
+import { Company, getCompany } from './companies';
 
 export interface StoredPosition {
   id: string;
@@ -10,6 +10,8 @@ export interface StoredPosition {
   secondaryValuationM: number;
   entryDate: string;
   notes: string;
+  carryPct?: number;        // e.g. 20 → 20% carry on gains
+  managementFeePct?: number; // e.g. 2 → 2% / year of cost basis
 }
 
 export interface DerivedPosition extends StoredPosition {
@@ -18,6 +20,7 @@ export interface DerivedPosition extends StoredPosition {
   sector: string;
   color: string;
   stage: string;
+  domain: string;
   currSharePrice: number;
   secSharePrice: number;
   costBasis: number;
@@ -29,6 +32,10 @@ export interface DerivedPosition extends StoredPosition {
   days: number;
   annualizedRet: number;
   allocation: number;
+  carryFee: number;
+  managementFeeAnnual: number;
+  managementFeeTotal: number;
+  netUnrealizedPL: number;
 }
 
 const STORAGE_KEY = 'pm-terminal-positions';
@@ -51,13 +58,14 @@ export function makeId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-export function derivePosition(p: StoredPosition, totalCurrVal: number): DerivedPosition {
-  const company = getCompany(p.companyId);
+export function derivePosition(p: StoredPosition, totalCurrVal: number, liveCompanies?: Company[]): DerivedPosition {
+  const company = liveCompanies ? liveCompanies.find((c) => c.id === p.companyId) : getCompany(p.companyId);
   const name = company?.name ?? p.companyId;
   const ticker = company?.ticker ?? p.companyId.toUpperCase();
   const sector = company?.sector ?? 'Private';
   const color = company?.color ?? '#6366F1';
   const stage = company?.stage ?? 'Pre-IPO';
+  const domain = company?.domain ?? '';
 
   const currSharePrice = (p.currentValuationM / p.entryValuationM) * p.entrySharePrice;
   const secSharePrice = (p.secondaryValuationM / p.entryValuationM) * p.entrySharePrice;
@@ -71,7 +79,17 @@ export function derivePosition(p: StoredPosition, totalCurrVal: number): Derived
   const annualizedRet = (Math.pow(multiple, 365 / days) - 1) * 100;
   const allocation = totalCurrVal > 0 ? (currentValue / totalCurrVal) * 100 : 0;
 
-  return { ...p, name, ticker, sector, color, stage, currSharePrice, secSharePrice, costBasis, currentValue, secondaryValue, unrealizedPL, unrealizedPct, multiple, days, annualizedRet, allocation };
+  const carryFee = unrealizedPL > 0 ? ((p.carryPct ?? 0) / 100) * unrealizedPL : 0;
+  const managementFeeAnnual = ((p.managementFeePct ?? 0) / 100) * costBasis;
+  const managementFeeTotal = managementFeeAnnual * (days / 365);
+  const netUnrealizedPL = unrealizedPL - carryFee - managementFeeTotal;
+
+  return {
+    ...p, name, ticker, sector, color, stage, domain,
+    currSharePrice, secSharePrice, costBasis, currentValue, secondaryValue,
+    unrealizedPL, unrealizedPct, multiple, days, annualizedRet, allocation,
+    carryFee, managementFeeAnnual, managementFeeTotal, netUnrealizedPL,
+  };
 }
 
 /* formatters */

@@ -10,12 +10,12 @@ interface Props {
   onSave: (pos: StoredPosition) => void;
 }
 
-const EMPTY = { companyId: '', shares: '', entrySharePrice: '', entryValuationM: '', currentValuationM: '', secondaryValuationM: '', entryDate: '', notes: '' };
+const EMPTY = { companyId: '', shares: '', entrySharePrice: '', entryValuationM: '', currentValuationM: '', secondaryValuationM: '', entryDate: '', notes: '', carryPct: '', managementFeePct: '' };
 
 export default function AddPositionModal({ initial, onClose, onSave }: Props) {
   const [form, setForm] = useState(
     initial
-      ? { companyId: initial.companyId, shares: String(initial.shares), entrySharePrice: String(initial.entrySharePrice), entryValuationM: String(initial.entryValuationM), currentValuationM: String(initial.currentValuationM), secondaryValuationM: String(initial.secondaryValuationM), entryDate: initial.entryDate, notes: initial.notes }
+      ? { companyId: initial.companyId, shares: String(initial.shares), entrySharePrice: String(initial.entrySharePrice), entryValuationM: String(initial.entryValuationM), currentValuationM: String(initial.currentValuationM), secondaryValuationM: String(initial.secondaryValuationM), entryDate: initial.entryDate, notes: initial.notes, carryPct: initial.carryPct != null ? String(initial.carryPct) : '', managementFeePct: initial.managementFeePct != null ? String(initial.managementFeePct) : '' }
       : EMPTY
   );
 
@@ -44,6 +44,8 @@ export default function AddPositionModal({ initial, onClose, onSave }: Props) {
       secondaryValuationM: Number(form.secondaryValuationM) || Number(form.entryValuationM),
       entryDate: form.entryDate,
       notes: form.notes,
+      ...(form.carryPct !== '' && { carryPct: Number(form.carryPct) }),
+      ...(form.managementFeePct !== '' && { managementFeePct: Number(form.managementFeePct) }),
     });
     onClose();
   };
@@ -90,6 +92,17 @@ export default function AddPositionModal({ initial, onClose, onSave }: Props) {
           <div className="pm-fg full">
             <div className="pm-fl">Notes</div>
             <input className="pm-fi" placeholder="e.g. Series B entry via AngelList" value={form.notes} onChange={(e) => set('notes', e.target.value)} />
+          </div>
+          <div className="pm-fg full" style={{ borderTop: '1px solid var(--div)', paddingTop: 12, marginTop: 4 }}>
+            <div className="pm-fl" style={{ color: 'var(--txt3)', marginBottom: 8 }}>Fund Fees <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></div>
+          </div>
+          <div className="pm-fg">
+            <div className="pm-fl">Carry %</div>
+            <input className="pm-fi" type="number" placeholder="e.g. 20" min="0" max="100" value={form.carryPct} onChange={(e) => set('carryPct', e.target.value)} />
+          </div>
+          <div className="pm-fg">
+            <div className="pm-fl">Management Fee % / year</div>
+            <input className="pm-fi" type="number" placeholder="e.g. 2" min="0" max="10" step="0.1" value={form.managementFeePct} onChange={(e) => set('managementFeePct', e.target.value)} />
           </div>
           {costBasis > 0 && (
             <div className="pm-fg full">
