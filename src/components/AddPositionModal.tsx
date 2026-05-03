@@ -1,18 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { COMPANIES } from '@/lib/companies';
+import { COMPANIES, Company } from '@/lib/companies';
 import { StoredPosition, makeId, fmtK, fmtM, fmtPct } from '@/lib/positions';
 
 interface Props {
   initial?: StoredPosition | null;
+  companies?: Company[];
   onClose: () => void;
   onSave: (pos: StoredPosition) => void;
 }
 
 const EMPTY = { companyId: '', shares: '', entrySharePrice: '', entryValuationM: '', entryDate: '', notes: '', carryPct: '', managementFeePct: '' };
 
-export default function AddPositionModal({ initial, onClose, onSave }: Props) {
+export default function AddPositionModal({ initial, companies: liveCompanies, onClose, onSave }: Props) {
+  const companies = liveCompanies ?? COMPANIES;
   const [form, setForm] = useState(
     initial
       ? {

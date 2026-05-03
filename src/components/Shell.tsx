@@ -94,7 +94,8 @@ export default function Shell() {
   useEffect(() => { const t = setInterval(() => setTick(new Date()), 1000); return () => clearInterval(t); }, []);
 
   const rawTotalCurr = positions.reduce((s, p) => {
-    const curr = (p.currentValuationM / p.entryValuationM) * p.entrySharePrice;
+    const liveVal = companies.find((c) => c.id === p.companyId)?.currentValuationM ?? p.currentValuationM;
+    const curr = (liveVal / p.entryValuationM) * p.entrySharePrice;
     return s + p.shares * curr;
   }, 0);
 
@@ -278,6 +279,7 @@ export default function Shell() {
       {modal.open && (
         <AddPositionModal
           initial={modal.editing}
+          companies={companies}
           onClose={() => setModal({ open: false, editing: null })}
           onSave={handleSave}
         />

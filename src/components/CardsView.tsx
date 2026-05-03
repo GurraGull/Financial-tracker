@@ -1,4 +1,5 @@
 import { DerivedPosition, fmtK, fmtM, fmtPct, fmtX } from '@/lib/positions';
+import CompanyLogo from './CompanyLogo';
 
 interface Props { positions: DerivedPosition[]; onAdd: () => void; }
 
@@ -19,7 +20,7 @@ export default function CardsView({ positions, onAdd }: Props) {
       {positions.map((p) => (
         <div key={p.id} className="pm-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div className="pm-co-av" style={{ background: p.color, width: 36, height: 36, borderRadius: 9 }}>{p.name[0]}</div>
+            <CompanyLogo name={p.name} color={p.color} domain={p.domain} size={36} />
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{p.name}</div>
               <div className="pm-co-ticker">{p.ticker} · {p.sector}</div>
@@ -30,7 +31,7 @@ export default function CardsView({ positions, onAdd }: Props) {
             {[
               { l: 'Current Value', v: fmtK(p.currentValue), c: p.color },
               { l: 'Cost Basis', v: fmtK(p.costBasis), c: 'var(--txt)' },
-              { l: 'MOIC', v: fmtX(p.multiple), c: 'var(--indigo)' },
+              { l: 'P&L', v: (p.unrealizedPL >= 0 ? '+' : '') + fmtK(p.unrealizedPL), c: p.unrealizedPL >= 0 ? 'var(--green)' : 'var(--red)' },
               { l: 'Return', v: fmtPct(p.unrealizedPct), c: p.unrealizedPct >= 0 ? 'var(--green)' : 'var(--red)' },
             ].map((m) => (
               <div key={m.l} className="pm-card-mini-item">
@@ -42,7 +43,10 @@ export default function CardsView({ positions, onAdd }: Props) {
           <div className="pm-card-foot">
             <span>{p.shares.toLocaleString()} shares</span>
             <span>{p.allocation.toFixed(1)}% of portfolio</span>
-            <span>{fmtM(p.currentValuationM)} val</span>
+            {p.secondarySharePrice !== null
+              ? <span style={{ color: 'var(--txt2)' }}>2nd ${p.secondarySharePrice.toFixed(2)}</span>
+              : <span style={{ color: 'var(--txt3)' }}>{fmtM(p.liveValuationM)}</span>
+            }
           </div>
         </div>
       ))}
