@@ -32,6 +32,7 @@ export default function AdminPage() {
   const [draft, setDraft] = useState<Partial<Company>>({});
   const [secDraft, setSecDraft] = useState<{ forge: string; hiive: string; notice: string; notes: string }>({ forge: '', hiive: '', notice: '', notes: '' });
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [dbReady, setDbReady] = useState(true);
 
@@ -104,6 +105,30 @@ export default function AdminPage() {
     showToast('Saved');
   };
 
+  const handleSyncForge = async () => {
+    const sb = getSupabase();
+    if (!sb) { showToast('Supabase not connected', false); return; }
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { showToast('Not signed in', false); return; }
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/scrape-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) { showToast(json.error ?? 'Sync failed', false); return; }
+      const count = json.saved?.length ?? 0;
+      showToast(count > 0 ? `Saved ${count} Forge price${count !== 1 ? 's' : ''}` : 'No prices found — selectors may need updating');
+      if (count > 0) fetchSecondaryPrices().then(setSecondary);
+    } catch (e) {
+      showToast(String(e), false);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const filtered = companies.filter((co) =>
     co.name.toLowerCase().includes(search.toLowerCase()) || co.sector.toLowerCase().includes(search.toLowerCase())
   );
@@ -146,6 +171,9 @@ export default function AdminPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="pm-btn" style={{ fontSize: 11 }} onClick={handleSyncForge} disabled={syncing || !dbReady}>
+            {syncing ? 'Syncing…' : '⟳ Sync Forge Prices'}
+          </button>
           <Link href="/app"><button className="pm-btn" style={{ fontSize: 11 }}>← Portfolio</button></Link>
           <Link href="/"><button className="pm-btn" style={{ fontSize: 11 }}>Landing Page</button></Link>
         </div>
