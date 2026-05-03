@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { Company, COMPANIES } from '@/lib/companies';
-import { fetchCompanies } from '@/lib/companies-db';
+import { COMPANIES } from '@/lib/companies';
 
 function fmtVal(m: number) {
   if (m >= 1_000_000) return `$${(m / 1_000_000).toFixed(1)}T`;
@@ -58,22 +57,13 @@ export default function LandingPage() {
   const [sector, setSector] = useState('All');
   const [sortKey, setSortKey] = useState<SortKey>('valuation');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
-  const [allCompanies, setAllCompanies] = useState<Company[]>(COMPANIES);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchCompanies().then(({ companies, updatedAt: ts }) => {
-      if (companies.length) setAllCompanies(companies);
-      setUpdatedAt(ts);
-    });
-  }, []);
 
   const handleSort = (k: SortKey) => {
     if (k === sortKey) setSortDir((d) => (d === -1 ? 1 : -1));
     else { setSortKey(k); setSortDir(-1); }
   };
 
-  const filtered = allCompanies.filter((co) => {
+  const filtered = COMPANIES.filter((co) => {
     if (sector === 'All') return true;
     const allowed = SECTOR_MAP[sector] ?? [];
     return allowed.includes(co.sector);
@@ -153,7 +143,6 @@ export default function LandingPage() {
               <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--txt)', letterSpacing: '-0.02em' }}>Private Market Universe</div>
               <div style={{ fontSize: 11, color: 'var(--txt3)', marginTop: 3 }}>
                 Blended price = median of Forge · Hiive · Notice
-                {updatedAt && ` · Updated ${new Date(updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
               </div>
             </div>
             <div style={{ fontSize: 11, color: 'var(--txt3)', padding: '4px 10px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--div)', borderRadius: 6 }}>
