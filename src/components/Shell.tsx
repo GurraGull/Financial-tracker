@@ -300,6 +300,7 @@ export default function Shell() {
 
       {modal.open && (
         <AddPositionModal
+          companies={companies}
           initial={modal.editing}
           onClose={() => setModal({ open: false, editing: null })}
           onSave={handleSave}

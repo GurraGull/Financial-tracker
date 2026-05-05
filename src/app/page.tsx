@@ -129,10 +129,10 @@ export default function LandingPage() {
         <section style={{ marginBottom: 64 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
             {[
-              { icon: '◈', title: 'Curated private universe', body: 'We track 27+ pre-IPO companies. Valuations update as new rounds close — no noise, no duplicates.' },
-              { icon: '◉', title: 'Add your portfolio', body: 'Log your shares, entry price, and entry valuation. PM Terminal calculates cost basis, current value, MOIC, and IRR automatically.' },
+              { icon: '◈', title: 'Curated private universe', body: 'We track admin-curated private companies with structured last-round valuations and secondary market observations.' },
+              { icon: '◉', title: 'Add your portfolio', body: 'Log your position type, cost basis, entry valuation, and fees. PM Terminal calculates estimated value, gain, and MOIC automatically.' },
               { icon: '◎', title: 'Secondary market pricing', body: 'Blended price is the median of Forge, Hiive, and Notice — the three largest private secondary markets.' },
-              { icon: '✎', title: 'Projected value', body: 'Where data allows, we project forward based on ARR growth and sector comps. Estimates are always clearly labelled.' },
+              { icon: '✎', title: 'Latest valuation signal', body: 'We anchor estimates to the latest credible valuation signal and show indicative secondary pricing as a separate reference point.' },
             ].map((f) => (
               <div key={f.title} style={{ background: 'var(--card)', border: '1px solid var(--div)', borderRadius: 12, padding: '20px 18px' }}>
                 <div style={{ fontSize: 18, marginBottom: 10, color: 'var(--indigo)' }}>{f.icon}</div>
@@ -154,7 +154,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div style={{ fontSize: 11, color: 'var(--txt3)', padding: '4px 10px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--div)', borderRadius: 6 }}>
-              {sorted.length} of {COMPANIES.length} companies
+              {sorted.length} of {allCompanies.length} companies
             </div>
           </div>
 

@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { COMPANIES } from '@/lib/companies';
+import { Company } from '@/lib/companies';
 import { HoldingType, StoredPosition, makeId, fmtK, fmtM } from '@/lib/positions';
 
 interface Props {
+  companies: Company[];
   initial?: StoredPosition | null;
   onClose: () => void;
   onSave: (pos: StoredPosition) => void;
@@ -35,7 +36,7 @@ const EMPTY = {
   includeInCommunityStats: false,
 };
 
-export default function AddPositionModal({ initial, onClose, onSave }: Props) {
+export default function AddPositionModal({ companies, initial, onClose, onSave }: Props) {
   const [form, setForm] = useState(
     initial
       ? {
@@ -61,7 +62,7 @@ export default function AddPositionModal({ initial, onClose, onSave }: Props) {
   const setBool = (k: string, v: boolean) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleCompanyChange = (id: string) => {
-    const co = COMPANIES.find((c) => c.id === id);
+    const co = companies.find((c) => c.id === id);
     set('companyId', id);
     if (co) {
       setForm((f) => ({ ...f, companyId: id, entryValuationM: f.entryValuationM || String(co.currentValuationM) }));
@@ -104,7 +105,7 @@ export default function AddPositionModal({ initial, onClose, onSave }: Props) {
             <div className="pm-fl">Company</div>
             <select className="pm-fi" value={form.companyId} onChange={(e) => handleCompanyChange(e.target.value)}>
               <option value="">Select a company…</option>
-              {COMPANIES.map((c) => (
+              {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name} — {fmtM(c.currentValuationM)} · {c.stage}</option>
               ))}
             </select>

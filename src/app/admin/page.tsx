@@ -7,6 +7,34 @@ import { Company, COMPANIES } from '@/lib/companies';
 import { fetchCompanies, saveCompany, addSecondaryPrice, fetchSecondaryPrices } from '@/lib/companies-db';
 
 type SecondaryMap = Record<string, { forge?: number; hiive?: number; notice?: number; lastUpdated?: string }>;
+const NEW_COMPANY_ID = '__new__';
+
+function slugifyCompanyId(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function emptyCompanyDraft(): Company {
+  return {
+    id: '',
+    name: '',
+    ticker: '',
+    sector: 'Other',
+    color: '#635BFF',
+    currentValuationM: 0,
+    lastRoundDate: new Date().toISOString().slice(0, 10),
+    stage: 'Pre-IPO',
+    description: '',
+    arrM: 0,
+    forgePrice: 0,
+    hiivePrice: 0,
+    noticePrice: 0,
+    domain: '',
+  };
+}
 
 function fmtVal(m: number) {
   if (m >= 1_000_000) return `$${(m / 1_000_000).toFixed(2)}T`;
@@ -23,7 +51,7 @@ function timeAgo(iso: string) {
 }
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [authed, setAuthed] = useState<boolean | null>(() => (getSupabase() ? null : false));
   const [companies, setCompanies] = useState<Company[]>(COMPANIES);
   const [secondary, setSecondary] = useState<SecondaryMap>({});
   const [search, setSearch] = useState('');
@@ -39,13 +67,23 @@ export default function AdminPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  const sortCompanies = (rows: Company[]) =>
+    [...rows].sort((a, b) => b.currentValuationM - a.currentValuationM);
+
   /* check auth */
   useEffect(() => {
     const sb = getSupabase();
-    if (!sb) { setAuthed(false); return; }
-    sb.auth.getSession().then(({ data }) => setAuthed(!!data.session?.user));
+    if (!sb) return;
+
+    let cancelled = false;
+    sb.auth.getSession().then(({ data }) => {
+      if (!cancelled) setAuthed(!!data.session?.user);
+    });
     const { data: { subscription } } = sb.auth.onAuthStateChange((_ev, s) => setAuthed(!!s?.user));
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   /* load data */
@@ -65,28 +103,67 @@ export default function AdminPage() {
     setSecDraft({ forge: String(sec.forge ?? co.forgePrice), hiive: String(sec.hiive ?? co.hiivePrice), notice: String(sec.notice ?? co.noticePrice), notes: '' });
   };
 
+  const startCreate = () => {
+    setEditing(NEW_COMPANY_ID);
+    setDraft(emptyCompanyDraft());
+    setSecDraft({ forge: '', hiive: '', notice: '', notes: '' });
+  };
+
   const handleSave = async () => {
     if (!editing || !draft) return;
     setSaving(true);
-    const updated: Company = { ...companies.find(c => c.id === editing)!, ...draft } as Company;
+    const creating = editing === NEW_COMPANY_ID;
+    const base = creating ? emptyCompanyDraft() : companies.find((c) => c.id === editing);
+    if (!base) {
+      showToast('Company not found', false);
+      setSaving(false);
+      return;
+    }
+
+    const draftName = String(draft.name ?? base.name).trim();
+    const draftId = String(draft.id ?? (creating ? slugifyCompanyId(draftName) : base.id)).trim();
+    const draftTicker = String(draft.ticker ?? base.ticker).trim().toUpperCase();
+
+    if (!draftName || !draftId || !draftTicker) {
+      showToast('Name, ID, and ticker are required', false);
+      setSaving(false);
+      return;
+    }
+
+    if (creating && companies.some((c) => c.id === draftId)) {
+      showToast('A company with that ID already exists', false);
+      setSaving(false);
+      return;
+    }
+
+    const updated: Company = {
+      ...base,
+      ...draft,
+      id: draftId,
+      name: draftName,
+      ticker: draftTicker,
+      sector: String(draft.sector ?? base.sector).trim() || 'Other',
+      description: String(draft.description ?? base.description).trim(),
+      domain: String(draft.domain ?? base.domain).trim(),
+    } as Company;
 
     const err = await saveCompany(updated);
     if (err) { showToast(err, false); setSaving(false); return; }
 
     /* save secondary prices if changed */
-    const orig = secondary[editing] ?? {};
+    const orig = secondary[updated.id] ?? {};
     const sources: Array<'forge' | 'hiive' | 'notice'> = ['forge', 'hiive', 'notice'];
     for (const src of sources) {
       const val = parseFloat(secDraft[src]);
       if (!isNaN(val) && val !== orig[src]) {
-        await addSecondaryPrice(editing, src, val, secDraft.notes);
+        await addSecondaryPrice(updated.id, src, val, secDraft.notes);
       }
     }
 
-    setCompanies((prev) => prev.map((c) => (c.id === editing ? updated : c)));
+    setCompanies((prev) => sortCompanies(creating ? [...prev, updated] : prev.map((c) => (c.id === updated.id ? updated : c))));
     setSecondary((prev) => ({
       ...prev,
-      [editing]: {
+      [updated.id]: {
         forge: parseFloat(secDraft.forge) || orig.forge,
         hiive: parseFloat(secDraft.hiive) || orig.hiive,
         notice: parseFloat(secDraft.notice) || orig.notice,
@@ -151,7 +228,7 @@ export default function AdminPage() {
         {!dbReady && (
           <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 12, color: '#F59E0B', lineHeight: 1.6 }}>
             <strong>Database not set up yet.</strong> Run <code style={{ fontFamily: 'monospace', background: 'rgba(245,158,11,0.12)', padding: '1px 5px', borderRadius: 4 }}>supabase/migrations/001_companies.sql</code> in your Supabase SQL editor to create the companies table and seed it.
-            Showing hardcoded data — changes won't be saved until the DB is ready.
+            Showing hardcoded data — changes won&apos;t be saved until the DB is ready.
           </div>
         )}
 
@@ -164,8 +241,86 @@ export default function AdminPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ maxWidth: 320 }}
           />
+          <button className="pm-btn pri" style={{ fontSize: 11 }} onClick={startCreate}>+ Add Company</button>
           <div style={{ fontSize: 11, color: 'var(--txt3)' }}>{filtered.length} result{filtered.length !== 1 ? 's' : ''}</div>
         </div>
+
+        {editing === NEW_COMPANY_ID && (
+          <div style={{ background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--indigo)', marginBottom: 12 }}>Add Company</div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 140px', gap: 12, marginBottom: 16 }}>
+              <div className="pm-fg">
+                <div className="pm-fl">Company Name</div>
+                <input className="pm-fi" value={draft.name ?? ''} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value, id: d.id || slugifyCompanyId(e.target.value) }))} />
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">Ticker</div>
+                <input className="pm-fi" value={draft.ticker ?? ''} onChange={(e) => setDraft((d) => ({ ...d, ticker: e.target.value.toUpperCase() }))} />
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">ID</div>
+                <input className="pm-fi" value={draft.id ?? ''} onChange={(e) => setDraft((d) => ({ ...d, id: slugifyCompanyId(e.target.value) }))} />
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">Sector</div>
+                <input className="pm-fi" value={draft.sector ?? ''} onChange={(e) => setDraft((d) => ({ ...d, sector: e.target.value }))} />
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">Stage</div>
+                <select className="pm-fi" value={draft.stage ?? 'Pre-IPO'} onChange={(e) => setDraft((d) => ({ ...d, stage: e.target.value }))}>
+                  {['Pre-IPO', 'Series A', 'Series B', 'Series C', 'Series D', 'Series E+', 'Series F', 'Series G', 'Series H', 'Series J', 'IPO Filed'].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">Brand Color</div>
+                <input className="pm-fi" value={draft.color ?? '#635BFF'} onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))} />
+              </div>
+              <div className="pm-fg" style={{ gridColumn: '1 / 3' }}>
+                <div className="pm-fl">Description</div>
+                <input className="pm-fi" value={draft.description ?? ''} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} />
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">Domain</div>
+                <input className="pm-fi" value={draft.domain ?? ''} onChange={(e) => setDraft((d) => ({ ...d, domain: e.target.value }))} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+              <div className="pm-fg">
+                <div className="pm-fl">Valuation ($M)</div>
+                <input className="pm-fi" type="number" value={draft.currentValuationM ?? 0} onChange={(e) => setDraft((d) => ({ ...d, currentValuationM: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">ARR ($M)</div>
+                <input className="pm-fi" type="number" value={draft.arrM ?? 0} onChange={(e) => setDraft((d) => ({ ...d, arrM: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">Last Round Date</div>
+                <input className="pm-fi" type="date" value={draft.lastRoundDate ?? new Date().toISOString().slice(0, 10)} onChange={(e) => setDraft((d) => ({ ...d, lastRoundDate: e.target.value }))} />
+              </div>
+              <div className="pm-fg">
+                <div className="pm-fl">Notes (optional)</div>
+                <input className="pm-fi" placeholder="e.g. Seeded manually" value={secDraft.notes} onChange={(e) => setSecDraft((d) => ({ ...d, notes: e.target.value }))} />
+              </div>
+              {(['forge', 'hiive', 'notice'] as const).map((src) => (
+                <div key={src} className="pm-fg">
+                  <div className="pm-fl">{src.charAt(0).toUpperCase() + src.slice(1)} Price ($)</div>
+                  <input className="pm-fi" type="number" step="0.01" value={secDraft[src]} onChange={(e) => setSecDraft((d) => ({ ...d, [src]: e.target.value }))} />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="pm-btn pri" onClick={handleSave} disabled={saving} style={{ fontSize: 11 }}>
+                {saving ? 'Saving…' : 'Create Company'}
+              </button>
+              <button className="pm-btn" onClick={() => setEditing(null)} style={{ fontSize: 11 }}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {/* COMPANY TABLE */}
         <div style={{ background: 'var(--card)', border: '1px solid var(--div)', borderRadius: 12, overflow: 'hidden' }}>
@@ -210,8 +365,24 @@ export default function AdminPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
 
                       <div className="pm-fg">
+                        <div className="pm-fl">Company Name</div>
+                        <input className="pm-fi" value={draft.name ?? co.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} />
+                      </div>
+                      <div className="pm-fg">
+                        <div className="pm-fl">Ticker</div>
+                        <input className="pm-fi" value={draft.ticker ?? co.ticker} onChange={(e) => setDraft((d) => ({ ...d, ticker: e.target.value.toUpperCase() }))} />
+                      </div>
+                      <div className="pm-fg">
+                        <div className="pm-fl">Sector</div>
+                        <input className="pm-fi" value={draft.sector ?? co.sector} onChange={(e) => setDraft((d) => ({ ...d, sector: e.target.value }))} />
+                      </div>
+                      <div className="pm-fg">
                         <div className="pm-fl">Valuation ($M)</div>
                         <input className="pm-fi" type="number" value={draft.currentValuationM ?? co.currentValuationM} onChange={(e) => setDraft((d) => ({ ...d, currentValuationM: parseFloat(e.target.value) }))} />
+                      </div>
+                      <div className="pm-fg">
+                        <div className="pm-fl">Brand Color</div>
+                        <input className="pm-fi" value={draft.color ?? co.color} onChange={(e) => setDraft((d) => ({ ...d, color: e.target.value }))} />
                       </div>
                       <div className="pm-fg">
                         <div className="pm-fl">ARR ($M)</div>
@@ -232,6 +403,10 @@ export default function AdminPage() {
                       <div className="pm-fg" style={{ gridColumn: '2 / -1' }}>
                         <div className="pm-fl">Description</div>
                         <input className="pm-fi" value={draft.description ?? co.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} />
+                      </div>
+                      <div className="pm-fg">
+                        <div className="pm-fl">Domain</div>
+                        <input className="pm-fi" value={draft.domain ?? co.domain} onChange={(e) => setDraft((d) => ({ ...d, domain: e.target.value }))} />
                       </div>
                     </div>
 
