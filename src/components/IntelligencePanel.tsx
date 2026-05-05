@@ -1,23 +1,33 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { COMPANIES } from '@/lib/companies';
+import { Company } from '@/lib/companies';
 
 interface NewsItem { title: string; link: string; pubDate: string; source: string; }
 interface CompanyNews { companyId: string; name: string; color: string; items: NewsItem[]; loading: boolean; error: boolean; }
 
-interface Props { companyIds: string[]; }
+interface Props {
+  companyIds: string[];
+  companies: Company[];
+}
 
-export default function IntelligencePanel({ companyIds }: Props) {
+export default function IntelligencePanel({ companyIds, companies }: Props) {
   const [news, setNews] = useState<CompanyNews[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const targets = companyIds.length
-    ? COMPANIES.filter((c) => companyIds.includes(c.id)).slice(0, 6)
-    : COMPANIES.slice(0, 6);
+    ? companies.filter((c) => companyIds.includes(c.id)).slice(0, 6)
+    : companies.slice(0, 6);
 
   useEffect(() => {
-    setNews(targets.map((c) => ({ companyId: c.id, name: c.name, color: c.color, items: [], loading: true, error: false })));
+    if (targets.length === 0) return;
+
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setNews(targets.map((c) => ({ companyId: c.id, name: c.name, color: c.color, items: [], loading: true, error: false })));
+      }
+    });
 
     targets.forEach(async (co) => {
       try {
@@ -37,6 +47,9 @@ export default function IntelligencePanel({ companyIds }: Props) {
         setNews((prev) => prev.map((n) => n.companyId === co.id ? { ...n, loading: false, error: true } : n));
       }
     });
+    return () => {
+      cancelled = true;
+    };
   }, [companyIds.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -49,6 +62,13 @@ export default function IntelligencePanel({ companyIds }: Props) {
       </div>
 
       <div className="pm-intel-grid">
+        {targets.length === 0 && (
+          <div className="pm-empty" style={{ gridColumn: '1 / -1' }}>
+            <div className="pm-empty-icon">◉</div>
+            <div className="pm-empty-title">No tracked companies yet</div>
+            <div className="pm-empty-sub">Import your company list into Supabase or add a company in admin before using the news feed.</div>
+          </div>
+        )}
         {news.map((co) => (
           <div key={co.companyId} className="pm-intel-card" style={{ borderTopColor: co.color }}>
             <div className="pm-intel-body">

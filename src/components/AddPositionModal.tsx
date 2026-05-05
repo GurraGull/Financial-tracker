@@ -100,10 +100,16 @@ export default function AddPositionModal({ companies, initial, onClose, onSave }
       <div className="pm-modal pm-fu" onClick={(e) => e.stopPropagation()}>
         <div className="pm-modal-title">{isEdit ? 'Edit Position' : 'Add Position'}</div>
         <div className="pm-modal-sub">Track a private company holding with fee-aware value estimates</div>
+        {companies.length === 0 && (
+          <div className="pm-empty" style={{ marginBottom: 16 }}>
+            <div className="pm-empty-title">No companies available</div>
+            <div className="pm-empty-sub">Import your company dataset into Supabase or add a company in admin first.</div>
+          </div>
+        )}
         <div className="pm-form-grid">
           <div className="pm-fg full">
             <div className="pm-fl">Company</div>
-            <select className="pm-fi" value={form.companyId} onChange={(e) => handleCompanyChange(e.target.value)}>
+            <select className="pm-fi" value={form.companyId} onChange={(e) => handleCompanyChange(e.target.value)} disabled={companies.length === 0}>
               <option value="">Select a company…</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name} — {fmtM(c.currentValuationM)} · {c.stage}</option>
@@ -174,7 +180,7 @@ export default function AddPositionModal({ companies, initial, onClose, onSave }
         </div>
         <div className="pm-modal-footer">
           <button className="pm-btn" onClick={onClose}>Cancel</button>
-          <button className="pm-btn pri" onClick={handleSave}>{isEdit ? 'Save Changes →' : 'Add Position →'}</button>
+          <button className="pm-btn pri" onClick={handleSave} disabled={companies.length === 0}>{isEdit ? 'Save Changes →' : 'Add Position →'}</button>
         </div>
       </div>
     </div>

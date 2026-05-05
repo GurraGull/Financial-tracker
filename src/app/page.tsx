@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Company, COMPANIES } from '@/lib/companies';
+import { Company } from '@/lib/companies';
 import { fetchCompanies } from '@/lib/companies-db';
 
 function fmtVal(m: number) {
@@ -55,12 +55,12 @@ export default function LandingPage() {
   const [sector, setSector] = useState('All');
   const [sortKey, setSortKey] = useState<SortKey>('valuation');
   const [sortDir, setSortDir] = useState<1 | -1>(-1);
-  const [allCompanies, setAllCompanies] = useState<Company[]>(COMPANIES);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCompanies().then(({ companies, updatedAt: ts }) => {
-      if (companies.length) setAllCompanies(companies);
+      setAllCompanies(companies);
       setUpdatedAt(ts);
     });
   }, []);
@@ -154,7 +154,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div style={{ fontSize: 11, color: 'var(--txt3)', padding: '4px 10px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--div)', borderRadius: 6 }}>
-              {sorted.length} of {allCompanies.length} companies
+              {sorted.length} companies
             </div>
           </div>
 
@@ -190,6 +190,14 @@ export default function LandingPage() {
               ))}
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--txt3)', textTransform: 'uppercase', letterSpacing: '0.07em', textAlign: 'right' }}>Stage</div>
             </div>
+
+            {sorted.length === 0 && (
+              <div className="pm-empty" style={{ padding: '32px 20px' }}>
+                <div className="pm-empty-icon">◈</div>
+                <div className="pm-empty-title">No companies loaded yet</div>
+                <div className="pm-empty-sub">Import your real company dataset into Supabase and the public company list will appear here.</div>
+              </div>
+            )}
 
             {sorted.map((co, idx) => {
               const blended = median(co.forgePrice, co.hiivePrice, co.noticePrice);

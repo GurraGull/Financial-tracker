@@ -5,7 +5,7 @@ import type { User } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import { dbLoad, dbUpsert, dbDelete } from '@/lib/db';
 import { StoredPosition, DerivedPosition, derivePosition, loadPositions, savePositions } from '@/lib/positions';
-import { Company, COMPANIES } from '@/lib/companies';
+import { Company } from '@/lib/companies';
 import { fetchCompanies } from '@/lib/companies-db';
 import SummaryStrip from './SummaryStrip';
 import PositionsTable from './PositionsTable';
@@ -39,11 +39,13 @@ export default function Shell() {
   const [sort, setSort] = useState<SortState>({ key: 'estimatedValue', dir: -1 });
   const [modal, setModal] = useState<{ open: boolean; editing: StoredPosition | null }>({ open: false, editing: null });
   const [tick, setTick] = useState(new Date());
-  const [companies, setCompanies] = useState<Company[]>(COMPANIES);
+  const [companies, setCompanies] = useState<Company[]>([]);
 
-  /* fetch live company data from DB (falls back to hardcoded on error) */
+  /* fetch company data from DB */
   useEffect(() => {
-    fetchCompanies().then(({ companies: rows }) => { if (rows.length) setCompanies(rows); });
+    fetchCompanies().then(({ companies: rows }) => {
+      setCompanies(rows);
+    });
   }, []);
 
   /* auth bootstrap */
@@ -271,7 +273,7 @@ export default function Shell() {
             />
           )}
           {view === 'cards' && <CardsView positions={derived} />}
-          {view === 'intelligence' && <IntelligencePanel companyIds={companyIds} />}
+          {view === 'intelligence' && <IntelligencePanel companyIds={companyIds} companies={companies} />}
 
           {/* Mobile-only inline stats (replaces hidden side panel) */}
           <div style={{ display: 'none' }} className="pm-mobile-stats">

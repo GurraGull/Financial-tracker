@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabase';
-import { Company, COMPANIES } from '@/lib/companies';
+import { Company } from '@/lib/companies';
 import { fetchCompanies, saveCompany, addSecondaryPrice, fetchSecondaryPrices } from '@/lib/companies-db';
 
 type SecondaryMap = Record<string, { forge?: number; hiive?: number; notice?: number; lastUpdated?: string }>;
@@ -52,7 +52,7 @@ function timeAgo(iso: string) {
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState<boolean | null>(() => (getSupabase() ? null : false));
-  const [companies, setCompanies] = useState<Company[]>(COMPANIES);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [secondary, setSecondary] = useState<SecondaryMap>({});
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export default function AdminPage() {
   const [secDraft, setSecDraft] = useState<{ forge: string; hiive: string; notice: string; notes: string }>({ forge: '', hiive: '', notice: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
-  const [dbReady, setDbReady] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -89,9 +89,9 @@ export default function AdminPage() {
   /* load data */
   useEffect(() => {
     if (!authed) return;
-    fetchCompanies().then(({ companies: rows }) => {
-      if (rows === COMPANIES) setDbReady(false);
-      else setCompanies(rows);
+    fetchCompanies().then(({ companies: rows, error }) => {
+      setDbError(error);
+      setCompanies(rows);
     });
     fetchSecondaryPrices().then(setSecondary);
   }, [authed]);
@@ -225,10 +225,9 @@ export default function AdminPage() {
       <div style={{ position: 'relative', zIndex: 1, maxWidth: 1000, margin: '0 auto', padding: '24px 20px' }}>
 
         {/* DB NOT READY WARNING */}
-        {!dbReady && (
+        {dbError && (
           <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 12, color: '#F59E0B', lineHeight: 1.6 }}>
-            <strong>Database not set up yet.</strong> Run <code style={{ fontFamily: 'monospace', background: 'rgba(245,158,11,0.12)', padding: '1px 5px', borderRadius: 4 }}>supabase/migrations/001_companies.sql</code> in your Supabase SQL editor to create the companies table and seed it.
-            Showing hardcoded data — changes won&apos;t be saved until the DB is ready.
+            <strong>Database issue.</strong> {dbError}. Run <code style={{ fontFamily: 'monospace', background: 'rgba(245,158,11,0.12)', padding: '1px 5px', borderRadius: 4 }}>supabase/migrations/001_companies.sql</code> if the `companies` table is missing, then import your real dataset.
           </div>
         )}
 

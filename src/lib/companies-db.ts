@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import { Company, COMPANIES } from './companies';
+import { Company } from './companies';
 
 interface DBRow {
   id: string; name: string; ticker: string; sector: string; color: string;
@@ -28,21 +28,22 @@ function companyToRow(c: Company): Omit<DBRow, 'updated_at'> {
   };
 }
 
-export async function fetchCompanies(): Promise<{ companies: Company[]; updatedAt: string | null }> {
+export async function fetchCompanies(): Promise<{ companies: Company[]; updatedAt: string | null; error: string | null }> {
   const sb = getSupabase();
-  if (!sb) return { companies: COMPANIES, updatedAt: null };
+  if (!sb) return { companies: [], updatedAt: null, error: 'Not connected' };
   try {
     const { data, error } = await sb
       .from('companies')
       .select('*')
       .order('current_valuation_m', { ascending: false });
-    if (error || !data?.length) return { companies: COMPANIES, updatedAt: null };
+    if (error) return { companies: [], updatedAt: null, error: error.message };
+    if (!data?.length) return { companies: [], updatedAt: null, error: null };
     const companies = (data as DBRow[]).map(rowToCompany);
     const updatedAt = (data as DBRow[]).reduce<string | null>((latest, r) =>
       !latest || r.updated_at > latest ? r.updated_at : latest, null);
-    return { companies, updatedAt };
+    return { companies, updatedAt, error: null };
   } catch {
-    return { companies: COMPANIES, updatedAt: null };
+    return { companies: [], updatedAt: null, error: 'Failed to load companies' };
   }
 }
 

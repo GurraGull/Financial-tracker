@@ -1,4 +1,4 @@
-import { getCompany, Company } from './companies';
+import { Company } from './companies';
 
 export type HoldingType = 'direct' | 'spv' | 'fund' | 'secondary' | 'other';
 
@@ -71,7 +71,7 @@ function blendedSecondaryPrice(company?: Company): number {
 }
 
 export function derivePosition(p: StoredPosition, totalCurrVal: number, liveCompanies?: Company[]): DerivedPosition {
-  const company = liveCompanies ? liveCompanies.find((c) => c.id === p.companyId) : getCompany(p.companyId);
+  const company = liveCompanies?.find((c) => c.id === p.companyId);
   const name = company?.name ?? p.companyId;
   const ticker = company?.ticker ?? p.companyId.toUpperCase();
   const sector = company?.sector ?? 'Private';
