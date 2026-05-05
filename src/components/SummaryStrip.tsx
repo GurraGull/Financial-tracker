@@ -2,22 +2,23 @@ import { fmtM, fmtPct, fmtX } from '@/lib/positions';
 
 interface Props {
   totalCost: number;
-  totalCurr: number;
+  totalEstimated: number;
   totalSec: number;
-  totalPL: number;
-  totalPLpct: number;
-  avgMultiple: number;
+  totalGrossGain: number;
+  totalGrossReturnPct: number;
+  avgGrossMultiple: number;
+  totalNetValue: number;
   gainers: number;
   total: number;
 }
 
-export default function SummaryStrip({ totalCost, totalCurr, totalSec, totalPL, totalPLpct, avgMultiple, gainers, total }: Props) {
+export default function SummaryStrip({ totalCost, totalEstimated, totalSec, totalGrossGain, totalGrossReturnPct, avgGrossMultiple, totalNetValue, gainers, total }: Props) {
   const stats = [
-    { label: 'Total Portfolio Value', val: fmtM(totalCurr), sub: 'Marked to current round', cls: '' },
+    { label: 'Estimated Value', val: fmtM(totalEstimated), sub: 'Using latest valuation signal', cls: '' },
     { label: 'Total Cost Basis', val: fmtM(totalCost), sub: 'Capital deployed', cls: '' },
-    { label: 'Unrealized Gain', val: fmtM(totalPL), sub: fmtPct(totalPLpct) + ' return', cls: 'c-pos' },
-    { label: 'Portfolio Multiple', val: fmtX(avgMultiple), sub: `${gainers}/${total} positions up`, cls: 'c-acc' },
-    { label: 'Secondary Value', val: fmtM(totalSec), sub: 'Secondary market basis', cls: '' },
+    { label: 'Gross Gain', val: fmtM(totalGrossGain), sub: fmtPct(totalGrossReturnPct) + ' gross return', cls: 'c-pos' },
+    { label: 'Gross Multiple', val: fmtX(avgGrossMultiple), sub: `${gainers}/${total} positions up`, cls: 'c-acc' },
+    { label: 'Net Value After Fees', val: fmtM(totalNetValue), sub: `Secondary basis ${fmtM(totalSec)}`, cls: '' },
   ];
   return (
     <div className="pm-strip pm-fu">

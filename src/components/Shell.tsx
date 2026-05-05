@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import { dbLoad, dbUpsert, dbDelete } from '@/lib/db';
-import { StoredPosition, DerivedPosition, derivePosition, loadPositions, savePositions, DEMO_POSITIONS } from '@/lib/positions';
+import { StoredPosition, DerivedPosition, derivePosition, loadPositions, savePositions } from '@/lib/positions';
 import { Company, COMPANIES } from '@/lib/companies';
 import { fetchCompanies } from '@/lib/companies-db';
 import SummaryStrip from './SummaryStrip';
@@ -28,20 +28,15 @@ interface SortState { key: string; dir: number; }
 
 const hasSupabase = () => !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
-function setDemo(set: (v: StoredPosition[]) => void, setIs: (v: boolean) => void, rows: StoredPosition[]) {
-  if (rows.length) { set(rows); setIs(false); } else { set(DEMO_POSITIONS); setIs(true); }
-}
-
 export default function Shell() {
+  const supabaseEnabled = hasSupabase();
   const [user, setUser] = useState<User | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authChecked, setAuthChecked] = useState(!supabaseEnabled);
   const [showAuth, setShowAuth] = useState(false);
-  const [positions, setPositions] = useState<StoredPosition[]>([]);
-  const [isDemo, setIsDemo] = useState(false);
-  const [demoDismissed, setDemoDismissed] = useState(false);
+  const [positions, setPositions] = useState<StoredPosition[]>(() => (supabaseEnabled ? [] : loadPositions()));
   const [expanded, setExpanded] = useState<string | null>(null);
   const [view, setView] = useState<View>('table');
-  const [sort, setSort] = useState<SortState>({ key: 'currentValue', dir: -1 });
+  const [sort, setSort] = useState<SortState>({ key: 'estimatedValue', dir: -1 });
   const [modal, setModal] = useState<{ open: boolean; editing: StoredPosition | null }>({ open: false, editing: null });
   const [tick, setTick] = useState(new Date());
   const [companies, setCompanies] = useState<Company[]>(COMPANIES);
@@ -54,25 +49,28 @@ export default function Shell() {
   /* auth bootstrap */
   useEffect(() => {
     const sb = getSupabase();
-    if (!sb) {
-      setAuthChecked(true);
-      setDemo(setPositions, setIsDemo, loadPositions());
-      return;
-    }
-    sb.auth.getSession().then(({ data, error }) => {
-      if (error) {
+    if (!sb) return;
+
+    let cancelled = false;
+    const bootstrapAuth = async () => {
+      try {
+        const { data, error } = await sb.auth.getSession();
+        if (cancelled) return;
+        if (error) {
+          setAuthChecked(true);
+          return;
+        }
+        const u = data.session?.user ?? null;
+        setUser(u);
         setAuthChecked(true);
-        setDemo(setPositions, setIsDemo, loadPositions());
-        return;
+        if (!u) setShowAuth(true);
+      } catch {
+        if (!cancelled) setAuthChecked(true);
       }
-      const u = data.session?.user ?? null;
-      setUser(u);
-      setAuthChecked(true);
-      if (!u) setShowAuth(true);
-    }).catch(() => {
-      setAuthChecked(true);
-      setDemo(setPositions, setIsDemo, loadPositions());
-    });
+    };
+
+    bootstrapAuth();
+
     let subscription: { unsubscribe: () => void } | null = null;
     try {
       const { data } = sb.auth.onAuthStateChange((_ev, session) => {
@@ -82,43 +80,65 @@ export default function Shell() {
       });
       subscription = data.subscription;
     } catch { /* ignore */ }
-    return () => subscription?.unsubscribe();
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   /* load positions when user known */
   useEffect(() => {
     if (!authChecked) return;
-    if (user) {
-      dbLoad(user.id).then((rows) => setDemo(setPositions, setIsDemo, rows));
-    } else if (!getSupabase()) {
-      setDemo(setPositions, setIsDemo, loadPositions());
-    }
+
+    let cancelled = false;
+    const loadKnownPositions = async () => {
+      if (user) {
+        const rows = await dbLoad(user.id);
+        if (!cancelled) setPositions(rows);
+        return;
+      }
+      if (!getSupabase()) {
+        const localPositions = await Promise.resolve(loadPositions());
+        if (!cancelled) setPositions(localPositions);
+      }
+    };
+
+    loadKnownPositions();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, authChecked]);
 
   /* clock */
   useEffect(() => { const t = setInterval(() => setTick(new Date()), 1000); return () => clearInterval(t); }, []);
 
   const rawTotalCurr = positions.reduce((s, p) => {
-    const curr = (p.currentValuationM / p.entryValuationM) * p.entrySharePrice;
-    return s + p.shares * curr;
+    const company = companies.find((c) => c.id === p.companyId);
+    const currentSignal = company?.currentValuationM ?? p.entryValuationM;
+    return s + (p.entryValuationM > 0 ? p.investmentAmount * (currentSignal / p.entryValuationM) : p.investmentAmount);
   }, 0);
 
   const derived: DerivedPosition[] = useMemo(() => {
     const all = positions.map((p) => derivePosition(p, rawTotalCurr, companies));
     return all.sort((a, b) => {
-      const av = a[sort.key as keyof DerivedPosition] as number;
-      const bv = b[sort.key as keyof DerivedPosition] as number;
-      return (bv - av) * sort.dir;
+      const av = a[sort.key as keyof DerivedPosition];
+      const bv = b[sort.key as keyof DerivedPosition];
+      if (typeof av === 'string' && typeof bv === 'string') {
+        return bv.localeCompare(av) * sort.dir;
+      }
+      return ((Number(bv) - Number(av)) || 0) * sort.dir;
     });
   }, [positions, sort, rawTotalCurr, companies]);
 
   const totalCost = derived.reduce((s, p) => s + p.costBasis, 0);
-  const totalCurr = derived.reduce((s, p) => s + p.currentValue, 0);
+  const totalEstimated = derived.reduce((s, p) => s + p.estimatedValue, 0);
   const totalSec = derived.reduce((s, p) => s + p.secondaryValue, 0);
-  const totalPL = totalCurr - totalCost;
-  const totalPLpct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
-  const avgMultiple = totalCost > 0 ? totalCurr / totalCost : 1;
-  const gainers = derived.filter((p) => p.unrealizedPL > 0).length;
+  const totalGrossGain = derived.reduce((s, p) => s + p.grossGain, 0);
+  const totalGrossReturnPct = totalCost > 0 ? (totalGrossGain / totalCost) * 100 : 0;
+  const avgGrossMultiple = totalCost > 0 ? totalEstimated / totalCost : 1;
+  const totalNetValue = derived.reduce((s, p) => s + p.netEstimatedValue, 0);
+  const gainers = derived.filter((p) => p.grossGain > 0).length;
 
   const handleSort = (key: string) => setSort((s) => ({ key, dir: s.key === key ? s.dir * -1 : -1 }));
   const handleExpand = (id: string) => setExpanded((e) => (e === id ? null : id));
@@ -128,7 +148,6 @@ export default function Shell() {
       ? positions.map((p) => (p.id === pos.id ? pos : p))
       : [...positions, pos];
     setPositions(next);
-    setIsDemo(false);
     if (user) { await dbUpsert(user.id, pos); }
     else { savePositions(next); }
   };
@@ -150,13 +169,13 @@ export default function Shell() {
   };
 
   const handleExportCSV = () => {
-    const headers = ['Company', 'Ticker', 'Sector', 'Shares', 'Entry Price ($)', 'Entry Valuation ($M)', 'Cost Basis ($)', 'Current Value ($)', 'Secondary Value ($)', 'Unrealized P&L ($)', 'Return (%)', 'MOIC', 'Annualized IRR (%)', 'Allocation (%)', 'Days Held', 'Entry Date', 'Notes'];
+    const headers = ['Company', 'Ticker', 'Sector', 'Holding Type', 'Investment Amount ($)', 'Entry Valuation ($M)', 'Estimated Value ($)', 'Net Value ($)', 'Secondary Value ($)', 'Gross Gain ($)', 'Gross Return (%)', 'Gross MOIC', 'Net MOIC', 'Allocation (%)', 'Days Held', 'Purchase Date', 'Vehicle', 'Notes'];
     const rows = derived.map((p) => [
       p.name, p.ticker, p.sector,
-      p.shares, p.entrySharePrice.toFixed(2), p.entryValuationM,
-      p.costBasis.toFixed(2), p.currentValue.toFixed(2), p.secondaryValue.toFixed(2),
-      p.unrealizedPL.toFixed(2), p.unrealizedPct.toFixed(2), p.multiple.toFixed(4),
-      p.annualizedRet.toFixed(2), p.allocation.toFixed(2), p.days, p.entryDate,
+      p.holdingType, p.costBasis.toFixed(2), p.entryValuationM,
+      p.estimatedValue.toFixed(2), p.netEstimatedValue.toFixed(2), p.secondaryValue.toFixed(2),
+      p.grossGain.toFixed(2), p.grossReturnPct.toFixed(2), p.grossMultiple.toFixed(4),
+      p.netMultiple.toFixed(4), p.allocation.toFixed(2), p.days, p.purchaseDate, p.vehicleName,
       `"${(p.notes ?? '').replace(/"/g, '""')}"`,
     ]);
     const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
@@ -175,7 +194,6 @@ export default function Shell() {
   const dateStr = tick.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const companyIds = [...new Set(derived.map((p) => p.companyId))];
   const userInitial = user?.email?.[0]?.toUpperCase() ?? 'A';
-  const showDemoBanner = isDemo && !demoDismissed;
 
   if (!authChecked) {
     return (
@@ -230,7 +248,7 @@ export default function Shell() {
             ))}
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {!user && !hasSupabase() && <span style={{ fontSize: 9, color: 'var(--txt3)', padding: '4px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, border: '1px solid var(--div)' }}>localStorage mode</span>}
+            {!user && !supabaseEnabled && <span style={{ fontSize: 9, color: 'var(--txt3)', padding: '4px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, border: '1px solid var(--div)' }}>localStorage mode</span>}
             <button className="pm-btn" onClick={handleExportCSV}>Export CSV</button>
             <button className="pm-btn pri" onClick={() => setModal({ open: true, editing: null })}>+ Add Position</button>
           </div>
@@ -238,18 +256,10 @@ export default function Shell() {
 
         {/* MAIN */}
         <main className="pm-main">
-          {showDemoBanner && (
-            <div className="pm-demo-banner">
-              <span>⚡ Demo mode — these are sample positions. Add your own to get started.</span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="pm-btn pri" style={{ padding: '4px 12px', fontSize: 10 }} onClick={() => setModal({ open: true, editing: null })}>+ Add Position</button>
-                <button className="pm-btn" style={{ padding: '4px 10px', fontSize: 10 }} onClick={() => setDemoDismissed(true)}>✕</button>
-              </div>
-            </div>
-          )}
           <SummaryStrip
-            totalCost={totalCost} totalCurr={totalCurr} totalSec={totalSec}
-            totalPL={totalPL} totalPLpct={totalPLpct} avgMultiple={avgMultiple}
+            totalCost={totalCost} totalEstimated={totalEstimated} totalSec={totalSec}
+            totalGrossGain={totalGrossGain} totalGrossReturnPct={totalGrossReturnPct} avgGrossMultiple={avgGrossMultiple}
+            totalNetValue={totalNetValue}
             gainers={gainers} total={derived.length}
           />
           {view === 'table' && (
@@ -266,16 +276,16 @@ export default function Shell() {
           {/* Mobile-only inline stats (replaces hidden side panel) */}
           <div style={{ display: 'none' }} className="pm-mobile-stats">
             <SidePanel
-              positions={derived} totalCost={totalCost} totalCurr={totalCurr} totalSec={totalSec}
-              totalPL={totalPL} totalPLpct={totalPLpct} avgMultiple={avgMultiple} gainers={gainers}
+              positions={derived} totalCost={totalCost} totalEstimated={totalEstimated} totalSec={totalSec}
+              totalGrossGain={totalGrossGain} totalGrossReturnPct={totalGrossReturnPct} avgGrossMultiple={avgGrossMultiple} totalNetValue={totalNetValue} gainers={gainers}
             />
           </div>
         </main>
 
         {/* SIDE PANEL — desktop only */}
         <SidePanel
-          positions={derived} totalCost={totalCost} totalCurr={totalCurr} totalSec={totalSec}
-          totalPL={totalPL} totalPLpct={totalPLpct} avgMultiple={avgMultiple} gainers={gainers}
+          positions={derived} totalCost={totalCost} totalEstimated={totalEstimated} totalSec={totalSec}
+          totalGrossGain={totalGrossGain} totalGrossReturnPct={totalGrossReturnPct} avgGrossMultiple={avgGrossMultiple} totalNetValue={totalNetValue} gainers={gainers}
         />
       </div>
 

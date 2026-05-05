@@ -1,15 +1,23 @@
 import { getCompany, Company } from './companies';
 
+export type HoldingType = 'direct' | 'spv' | 'fund' | 'secondary' | 'other';
+
 export interface StoredPosition {
   id: string;
   companyId: string;
-  shares: number;
-  entrySharePrice: number;
+  holdingType: HoldingType;
+  investmentAmount: number;
+  currency: string;
+  purchaseDate: string;
   entryValuationM: number;
-  currentValuationM: number;
-  secondaryValuationM: number;
-  entryDate: string;
+  shares: number | null;
+  costPerShare: number | null;
+  vehicleName: string;
+  carryPct: number;
+  annualManagementFeePct: number;
+  oneTimeAdminFee: number;
   notes: string;
+  includeInCommunityStats: boolean;
 }
 
 export interface DerivedPosition extends StoredPosition {
@@ -19,16 +27,21 @@ export interface DerivedPosition extends StoredPosition {
   color: string;
   stage: string;
   domain: string;
-  currSharePrice: number;
-  secSharePrice: number;
+  latestValuationSignalM: number;
+  indicativeSecondaryPrice: number;
   costBasis: number;
-  currentValue: number;
+  estimatedValue: number;
   secondaryValue: number;
-  unrealizedPL: number;
-  unrealizedPct: number;
-  multiple: number;
+  grossGain: number;
+  grossReturnPct: number;
+  grossMultiple: number;
+  carryAmount: number;
+  managementFeeEstimate: number;
+  netEstimatedValue: number;
+  netGain: number;
+  netMultiple: number;
   days: number;
-  annualizedRet: number;
+  yearsHeld: number;
   allocation: number;
 }
 
@@ -52,6 +65,11 @@ export function makeId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function blendedSecondaryPrice(company?: Company): number {
+  if (!company) return 0;
+  return [company.forgePrice, company.hiivePrice, company.noticePrice].sort((a, b) => a - b)[1];
+}
+
 export function derivePosition(p: StoredPosition, totalCurrVal: number, liveCompanies?: Company[]): DerivedPosition {
   const company = liveCompanies ? liveCompanies.find((c) => c.id === p.companyId) : getCompany(p.companyId);
   const name = company?.name ?? p.companyId;
@@ -61,19 +79,49 @@ export function derivePosition(p: StoredPosition, totalCurrVal: number, liveComp
   const stage = company?.stage ?? 'Pre-IPO';
   const domain = company?.domain ?? '';
 
-  const currSharePrice = (p.currentValuationM / p.entryValuationM) * p.entrySharePrice;
-  const secSharePrice = (p.secondaryValuationM / p.entryValuationM) * p.entrySharePrice;
-  const costBasis = p.shares * p.entrySharePrice;
-  const currentValue = p.shares * currSharePrice;
-  const secondaryValue = p.shares * secSharePrice;
-  const unrealizedPL = currentValue - costBasis;
-  const unrealizedPct = (unrealizedPL / costBasis) * 100;
-  const multiple = currentValue / costBasis;
-  const days = Math.max(1, Math.floor((Date.now() - new Date(p.entryDate).getTime()) / 86400000));
-  const annualizedRet = (Math.pow(multiple, 365 / days) - 1) * 100;
-  const allocation = totalCurrVal > 0 ? (currentValue / totalCurrVal) * 100 : 0;
+  const latestValuationSignalM = company?.currentValuationM ?? p.entryValuationM;
+  const indicativeSecondaryPrice = blendedSecondaryPrice(company);
+  const valuationMultiple = p.entryValuationM > 0 ? latestValuationSignalM / p.entryValuationM : 1;
+  const costBasis = p.investmentAmount;
+  const estimatedValue = costBasis * valuationMultiple;
+  const secondaryValue = p.shares && indicativeSecondaryPrice > 0 ? p.shares * indicativeSecondaryPrice : 0;
+  const grossGain = estimatedValue - costBasis;
+  const grossReturnPct = costBasis > 0 ? (grossGain / costBasis) * 100 : 0;
+  const grossMultiple = costBasis > 0 ? estimatedValue / costBasis : 0;
+  const days = Math.max(1, Math.floor((Date.now() - new Date(p.purchaseDate).getTime()) / 86400000));
+  const yearsHeld = days / 365;
+  const carryAmount = Math.max(grossGain, 0) * (p.carryPct / 100);
+  const managementFeeEstimate = costBasis * (p.annualManagementFeePct / 100) * yearsHeld;
+  const netEstimatedValue = Math.max(0, estimatedValue - carryAmount - managementFeeEstimate - p.oneTimeAdminFee);
+  const netGain = netEstimatedValue - costBasis;
+  const netMultiple = costBasis > 0 ? netEstimatedValue / costBasis : 0;
+  const allocation = totalCurrVal > 0 ? (estimatedValue / totalCurrVal) * 100 : 0;
 
-  return { ...p, name, ticker, sector, color, stage, domain, currSharePrice, secSharePrice, costBasis, currentValue, secondaryValue, unrealizedPL, unrealizedPct, multiple, days, annualizedRet, allocation };
+  return {
+    ...p,
+    name,
+    ticker,
+    sector,
+    color,
+    stage,
+    domain,
+    latestValuationSignalM,
+    indicativeSecondaryPrice,
+    costBasis,
+    estimatedValue,
+    secondaryValue,
+    grossGain,
+    grossReturnPct,
+    grossMultiple,
+    carryAmount,
+    managementFeeEstimate,
+    netEstimatedValue,
+    netGain,
+    netMultiple,
+    days,
+    yearsHeld,
+    allocation,
+  };
 }
 
 /* formatters */
@@ -92,12 +140,3 @@ export const fmtK = (n: number): string => {
 export const fmtPct = (n: number): string => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
 export const fmtX = (n: number): string => `${n.toFixed(2)}x`;
 export const fmtDays = (n: number): string => n >= 365 ? `${(n / 365).toFixed(1)}y` : `${n}d`;
-
-/* demo positions so the app looks populated on first load */
-export const DEMO_POSITIONS: StoredPosition[] = [
-  { id: 'demo1', companyId: 'anthropic', shares: 800, entrySharePrice: 5125, entryValuationM: 41000, currentValuationM: 900000, secondaryValuationM: 850000, entryDate: '2022-06-10', notes: 'Series B entry.' },
-  { id: 'demo2', companyId: 'spacex', shares: 200, entrySharePrice: 68500, entryValuationM: 137000, currentValuationM: 350000, secondaryValuationM: 350000, entryDate: '2020-08-22', notes: 'Secondary via Forge.' },
-  { id: 'demo3', companyId: 'openai', shares: 500, entrySharePrice: 17200, entryValuationM: 86000, currentValuationM: 300000, secondaryValuationM: 290000, entryDate: '2021-03-15', notes: 'Series C.' },
-  { id: 'demo4', companyId: 'anduril', shares: 2000, entrySharePrice: 425, entryValuationM: 8500, currentValuationM: 28000, secondaryValuationM: 28000, entryDate: '2022-12-01', notes: 'Series D.' },
-  { id: 'demo5', companyId: 'databricks', shares: 1200, entrySharePrice: 3167, entryValuationM: 38000, currentValuationM: 62000, secondaryValuationM: 62000, entryDate: '2023-02-14', notes: 'Series H.' },
-];

@@ -9,7 +9,7 @@ export default function CardsView({ positions }: Props) {
       <div className="pm-empty">
         <div className="pm-empty-icon">◈</div>
         <div className="pm-empty-title">No positions yet</div>
-        <div className="pm-empty-sub">Click "+ Add Position" to track your investments.</div>
+        <div className="pm-empty-sub">Click &quot;+ Add Position&quot; to track your investments.</div>
       </div>
     );
   }
@@ -28,10 +28,11 @@ export default function CardsView({ positions }: Props) {
           </div>
           <div className="pm-card-mini">
             {[
-              { l: 'Current Value', v: fmtK(p.currentValue), c: p.color },
+              { l: 'Estimated Value', v: fmtK(p.estimatedValue), c: p.color },
+              { l: 'Net Value', v: fmtK(p.netEstimatedValue), c: 'var(--txt)' },
               { l: 'Cost Basis', v: fmtK(p.costBasis), c: 'var(--txt)' },
-              { l: 'MOIC', v: fmtX(p.multiple), c: 'var(--indigo)' },
-              { l: 'Return', v: fmtPct(p.unrealizedPct), c: p.unrealizedPct >= 0 ? 'var(--green)' : 'var(--red)' },
+              { l: 'Net MOIC', v: fmtX(p.netMultiple), c: 'var(--indigo)' },
+              { l: 'Gross Return', v: fmtPct(p.grossReturnPct), c: p.grossReturnPct >= 0 ? 'var(--green)' : 'var(--red)' },
             ].map((m) => (
               <div key={m.l} className="pm-card-mini-item">
                 <div className="pm-cmi-label">{m.l}</div>
@@ -40,9 +41,9 @@ export default function CardsView({ positions }: Props) {
             ))}
           </div>
           <div className="pm-card-foot">
-            <span>{p.shares.toLocaleString()} shares</span>
+            <span>{p.holdingType}</span>
             <span>{p.allocation.toFixed(1)}% of portfolio</span>
-            <span>{fmtM(p.currentValuationM)} val</span>
+            <span>{fmtM(p.latestValuationSignalM)} signal</span>
           </div>
         </div>
       ))}

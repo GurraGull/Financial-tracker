@@ -1,20 +1,21 @@
 import Donut from './Donut';
-import { DerivedPosition, fmtM, fmtK, fmtPct, fmtX, fmtDays } from '@/lib/positions';
+import { DerivedPosition, fmtM, fmtPct, fmtX, fmtDays } from '@/lib/positions';
 
 interface Props {
   positions: DerivedPosition[];
   totalCost: number;
-  totalCurr: number;
+  totalEstimated: number;
   totalSec: number;
-  totalPL: number;
-  totalPLpct: number;
-  avgMultiple: number;
+  totalGrossGain: number;
+  totalGrossReturnPct: number;
+  avgGrossMultiple: number;
+  totalNetValue: number;
   gainers: number;
 }
 
-export default function SidePanel({ positions, totalCost, totalCurr, totalSec, totalPL, totalPLpct, avgMultiple, gainers }: Props) {
+export default function SidePanel({ positions, totalCost, totalEstimated, totalSec, totalGrossGain, totalGrossReturnPct, avgGrossMultiple, totalNetValue, gainers }: Props) {
   const segments = positions.map((p) => ({ color: p.color, pct: Math.round(p.allocation) }));
-  const ranked = [...positions].sort((a, b) => b.multiple - a.multiple);
+  const ranked = [...positions].sort((a, b) => b.netMultiple - a.netMultiple);
 
   return (
     <aside className="pm-side">
@@ -39,17 +40,17 @@ export default function SidePanel({ positions, totalCost, totalCurr, totalSec, t
       {ranked.map((p) => (
         <div key={p.id} className="pm-perf-item">
           <div className="pm-pi-left">
-            <div className="pm-pi-dot" style={{ background: p.color }} />
-            <div>
-              <div className="pm-pi-name">{p.name}</div>
-              <div className="pm-pi-sub">{fmtDays(p.days)} · {p.shares.toLocaleString()} sh</div>
+              <div className="pm-pi-dot" style={{ background: p.color }} />
+              <div>
+                <div className="pm-pi-name">{p.name}</div>
+                <div className="pm-pi-sub">{fmtDays(p.days)} · {p.holdingType}</div>
+              </div>
+            </div>
+            <div className="pm-pi-right">
+            <div className="pm-pi-gain" style={{ color: p.netGain >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtX(p.netMultiple)}</div>
+            <div className="pm-pi-pct">{fmtPct(p.grossReturnPct)}</div>
             </div>
           </div>
-          <div className="pm-pi-right">
-            <div className="pm-pi-gain" style={{ color: p.unrealizedPct >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmtX(p.multiple)}</div>
-            <div className="pm-pi-pct">{fmtPct(p.unrealizedPct)}</div>
-          </div>
-        </div>
       ))}
 
       <div style={{ height: 1, background: 'var(--div)' }} />
@@ -58,9 +59,10 @@ export default function SidePanel({ positions, totalCost, totalCurr, totalSec, t
         <div className="pm-sp-title">Portfolio Summary</div>
         {[
           { k: 'Total Deployed', v: fmtM(totalCost) },
-          { k: 'Current Value', v: fmtM(totalCurr), c: 'var(--indigo)' },
-          { k: 'Unrealized Gain', v: `${fmtM(totalPL)} (${fmtPct(totalPLpct)})`, c: 'var(--green)' },
-          { k: 'Portfolio MOIC', v: fmtX(avgMultiple), c: 'var(--indigo)' },
+          { k: 'Estimated Value', v: fmtM(totalEstimated), c: 'var(--indigo)' },
+          { k: 'Gross Gain', v: `${fmtM(totalGrossGain)} (${fmtPct(totalGrossReturnPct)})`, c: 'var(--green)' },
+          { k: 'Net Value', v: fmtM(totalNetValue), c: 'var(--indigo)' },
+          { k: 'Gross MOIC', v: fmtX(avgGrossMultiple), c: 'var(--indigo)' },
           { k: 'Secondary Value', v: fmtM(totalSec) },
           { k: 'Active Positions', v: `${positions.length}` },
           { k: 'Gainers / Losers', v: `${gainers} / ${positions.length - gainers}` },
