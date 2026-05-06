@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { Company } from '@/lib/companies';
+import { fetchNewsItems, NewsItemRecord } from '@/lib/news-db';
 
-interface NewsItem { title: string; link: string; pubDate: string; source: string; }
-interface CompanyNews { companyId: string; name: string; color: string; items: NewsItem[]; loading: boolean; error: boolean; }
+interface CompanyNews { companyId: string; name: string; color: string; items: NewsItemRecord[]; loading: boolean; error: boolean; }
 
 interface Props {
   companyIds: string[];
@@ -29,24 +29,34 @@ export default function IntelligencePanel({ companyIds, companies }: Props) {
       }
     });
 
-    targets.forEach(async (co) => {
-      try {
-        const q = encodeURIComponent(`${co.name} valuation funding investment`);
-        const res = await fetch(
-          `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`)}&count=5`
-        );
-        const json = await res.json();
-        const items: NewsItem[] = (json.items ?? []).slice(0, 5).map((it: { title: string; link: string; pubDate: string; author?: string }) => ({
-          title: it.title,
-          link: it.link,
-          pubDate: it.pubDate,
-          source: it.author || 'Google News',
-        }));
-        setNews((prev) => prev.map((n) => n.companyId === co.id ? { ...n, items, loading: false } : n));
-      } catch {
-        setNews((prev) => prev.map((n) => n.companyId === co.id ? { ...n, loading: false, error: true } : n));
+    const loadNews = async () => {
+      const { items, error } = await fetchNewsItems({
+        companyIds: targets.map((target) => target.id),
+        limit: 50,
+        publishedOnly: true,
+      });
+      if (cancelled) return;
+
+      const byCompany = new Map<string, NewsItemRecord[]>();
+      for (const item of items) {
+        const current = byCompany.get(item.companyId) ?? [];
+        if (current.length < 5) {
+          current.push(item);
+          byCompany.set(item.companyId, current);
+        }
       }
-    });
+
+      setNews(targets.map((target) => ({
+        companyId: target.id,
+        name: target.name,
+        color: target.color,
+        items: byCompany.get(target.id) ?? [],
+        loading: false,
+        error: !!error,
+      })));
+    };
+
+    loadNews();
     return () => {
       cancelled = true;
     };
@@ -113,8 +123,8 @@ export default function IntelligencePanel({ companyIds, companies }: Props) {
               <div className="pm-intel-news-list">
                 {co.items.map((item, i) => (
                   <div key={i} className="pm-intel-news-item">
-                    <a href={item.link} target="_blank" rel="noopener noreferrer" className="pm-intel-news-link">{item.title}</a>
-                    <div className="pm-intel-news-src">{new Date(item.pubDate).toLocaleDateString()}</div>
+                    <a href={item.link || '#'} target="_blank" rel="noopener noreferrer" className="pm-intel-news-link">{item.title}</a>
+                    <div className="pm-intel-news-src">{item.source} · {new Date(item.publishedAt).toLocaleDateString()}</div>
                   </div>
                 ))}
               </div>

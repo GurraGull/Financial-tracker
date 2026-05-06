@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getSupabase } from '@/lib/supabase';
 import { Company } from '@/lib/companies';
 import { fetchCompanies, saveCompany, addSecondaryPrice, fetchSecondaryPrices } from '@/lib/companies-db';
+import AdminNewsManager from '@/components/AdminNewsManager';
 
 type SecondaryMap = Record<string, { forge?: number; hiive?: number; notice?: number; lastUpdated?: string }>;
 const NEW_COMPANY_ID = '__new__';
@@ -439,6 +440,8 @@ export default function AdminPage() {
         <div style={{ marginTop: 12, fontSize: 10, color: 'var(--txt3)', textAlign: 'center' }}>
           Click any row to edit. Secondary price changes are stored with a timestamp — the app shows the most recent value per source.
         </div>
+
+        <AdminNewsManager companies={companies} onToast={showToast} />
       </div>
 
       {/* TOAST */}
