@@ -3,27 +3,30 @@
 ## System overview
 
 ```
-Vercel (static)          Supabase                  Worker (planned)
+Vercel (Next.js)         Supabase                  Automation (planned)
 ┌──────────────┐         ┌──────────────────────┐  ┌─────────────────────┐
-│  Next.js     │ ←─RLS─→ │  Postgres            │  │  Cron ingestion     │
-│  static HTML │         │  positions           │  │  - secondary prices │
-│  /           │         │  companies (planned) │  │  - valuation rounds │
-│  /app        │         │  secondary_prices    │  │  - news articles    │
+│  App Router  │ ←─RLS─→ │  Postgres            │  │  Cron / Workflow    │
+│  /           │         │  companies           │  │  - news ingest      │
+│  /app        │         │  positions           │  │  - classification   │
+│  /admin      │         │  secondary_prices    │  │  - health checks    │
 └──────────────┘         │  news_items          │  └─────────────────────┘
                          │  news_classifications│         │
-                         │                      │ ←───────┘
+                         │  company_research... │ ←───────┘
                          │  Auth (email+pass)   │
                          │  RLS per user_id     │
                          └──────────────────────┘
 ```
 
-## Static export constraint
+## Deployment model
 
-`next.config.ts` sets `output: "export"`. This means:
-- No server-side rendering, no API routes
-- All data fetching is client-side (Supabase JS client) or build-time
-- Vercel serves the `out/` directory as static files
-- The ingestion worker will be a separate service, not part of this repo
+This app is deployed as a normal Next.js app on Vercel.
+
+Current behavior:
+
+- public routes are mostly prerendered
+- app state is client-side around the Supabase JS client
+- App Router route handlers can be added for cron/webhook entrypoints
+- background automation can live either in this repo or in a separate worker path
 
 ## Secondary price computation
 
@@ -94,7 +97,7 @@ AuthModal shown (sign in / sign up)
   ↓ on success
 Shell loads positions from Supabase (dbLoad)
   ↓ no positions
-DEMO_POSITIONS shown with "add your own" prompt (planned)
+Empty portfolio state shown with add-position flow
 ```
 
 Fallback: if Supabase env vars absent, Shell uses localStorage. Useful for local dev without credentials.
@@ -118,9 +121,11 @@ src/
     AddPositionModal.tsx
     AuthModal.tsx
   lib/
-    companies.ts      ← closed company list, single source of truth
+    companies.ts      ← Company type
+    companies-db.ts   ← live company reads/writes
     positions.ts      ← StoredPosition, DerivedPosition, derivePosition, formatters
     db.ts             ← Supabase CRUD (dbLoad, dbUpsert, dbDelete)
+    news-db.ts        ← Supabase news reads/writes
     supabase.ts       ← client singleton, graceful fallback
 docs/
   SPEC.md

@@ -20,9 +20,9 @@ Start each Claude Code session with: "I'm on Stage N. Today's goal: [one task fr
 
 ## Stage 2 — Portfolio polish 🔄 CURRENT
 
-- [ ] CSV export (button exists, not wired up)
-- [ ] Password reset flow (email link via Supabase)
-- [ ] Empty state / onboarding for new users (no demo positions, guided "add your first position" flow)
+- [x] CSV export
+- [x] Password reset flow (email link via Supabase)
+- [x] Empty state / onboarding for new users (no demo positions)
 - [ ] Company logos (favicon/logo per company, served from `/public/logos/`)
 - [ ] Tooltips on financial metrics (MOIC, annualized return, secondary value)
 - [ ] Sort + filter on landing page company table (by sector, stage, valuation)
@@ -31,19 +31,23 @@ Start each Claude Code session with: "I'm on Stage N. Today's goal: [one task fr
 
 ## Stage 3 — Real data ingestion
 
-- [ ] Supabase `companies` table (migrate off hardcoded `companies.ts`)
-- [ ] Supabase `secondary_prices` table + blended price view
+- [x] Supabase `companies` table
+- [x] Supabase `secondary_prices` table + blended price view
+- [x] Company import staging SQL + research notes import path
 - [ ] Ingestion worker skeleton (separate repo or `/worker` package): cron-triggered, fetches secondary prices from Forge/Hiive/Notice scrape or API
-- [ ] Admin endpoint to update company valuation when a new round closes
-- [ ] `updated_at` timestamps shown on landing page ("prices as of…")
+- [x] Admin editing for company valuation and secondary prices
+- [x] `updated_at` timestamps shown on landing page ("prices as of…")
 
 ---
 
 ## Stage 4 — News intelligence pipeline
 
-- [ ] `news_items` + `news_classifications` tables (see ARCHITECTURE.md)
+- [x] `news_items` table
+- [x] Manual admin news management
+- [x] IntelligencePanel reads stored `news_items`
+- [x] `news_classifications` + `news_ingestion_runs` schema
 - [ ] Ingestion job: fetch articles per company, write to `news_items`
-- [ ] Classification job: call Claude API (`claude-opus-4-7`, adaptive thinking) per article, write to `news_classifications`
+- [ ] Classification job: call model per article, write to `news_classifications`
 - [ ] Admin review UI: approve / reject / correct classifications
 - [ ] IntelligencePanel: show approved articles with catalyst type labels
 - [ ] Valuation-round catalyst: on admin approval, prompt to update `companies.current_valuation_m`
