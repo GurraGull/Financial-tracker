@@ -145,12 +145,19 @@ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE public.positions
+  DROP COLUMN IF EXISTS entry_share_price,
+  DROP COLUMN IF EXISTS current_valuation_m,
+  DROP COLUMN IF EXISTS secondary_valuation_m,
+  DROP COLUMN IF EXISTS entry_date;
+
 ALTER TABLE public.positions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "positions_select_own" ON public.positions;
 DROP POLICY IF EXISTS "positions_insert_own" ON public.positions;
 DROP POLICY IF EXISTS "positions_update_own" ON public.positions;
 DROP POLICY IF EXISTS "positions_delete_own" ON public.positions;
+DROP POLICY IF EXISTS "Users manage own positions" ON public.positions;
 
 CREATE POLICY "positions_select_own" ON public.positions
   FOR SELECT USING (auth.uid() = user_id);

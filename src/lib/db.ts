@@ -17,8 +17,6 @@ interface DbRow {
   one_time_admin_fee?: number;
   notes: string;
   include_in_community_stats?: boolean;
-  entry_share_price?: number;
-  entry_date?: string;
 }
 
 const toRow = (p: StoredPosition, userId: string): DbRow & { user_id: string } => ({
@@ -44,12 +42,12 @@ const fromRow = (r: DbRow): StoredPosition => ({
   id: r.id,
   companyId: r.company_id,
   holdingType: (r.holding_type as StoredPosition['holdingType']) ?? 'direct',
-  investmentAmount: Number(r.investment_amount ?? ((r.shares ?? 0) * (r.entry_share_price ?? 0))),
+  investmentAmount: Number(r.investment_amount ?? 0),
   currency: r.currency ?? 'USD',
-  purchaseDate: r.purchase_date ?? r.entry_date ?? '',
+  purchaseDate: r.purchase_date ?? '',
   entryValuationM: Number(r.entry_valuation_m),
   shares: r.shares == null ? null : Number(r.shares),
-  costPerShare: r.cost_per_share == null ? (r.entry_share_price == null ? null : Number(r.entry_share_price)) : Number(r.cost_per_share),
+  costPerShare: r.cost_per_share == null ? null : Number(r.cost_per_share),
   vehicleName: r.vehicle_name ?? '',
   carryPct: Number(r.carry_pct ?? 0),
   annualManagementFeePct: Number(r.annual_management_fee_pct ?? 0),
