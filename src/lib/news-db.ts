@@ -10,6 +10,9 @@ export interface NewsItemRecord {
   tag: string;
   publishedAt: string;
   isPublished: boolean;
+  submissionSource: string;
+  submittedBy: string;
+  externalId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,6 +27,9 @@ interface NewsRow {
   tag: string;
   published_at: string;
   is_published: boolean;
+  submission_source?: string;
+  submitted_by?: string;
+  external_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +44,9 @@ const fromRow = (row: NewsRow): NewsItemRecord => ({
   tag: row.tag,
   publishedAt: row.published_at,
   isPublished: row.is_published,
+  submissionSource: row.submission_source ?? 'manual',
+  submittedBy: row.submitted_by ?? '',
+  externalId: row.external_id ?? '',
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -52,6 +61,9 @@ const toRow = (item: Omit<NewsItemRecord, 'createdAt' | 'updatedAt'>): Omit<News
   tag: item.tag,
   published_at: item.publishedAt,
   is_published: item.isPublished,
+  submission_source: item.submissionSource,
+  submitted_by: item.submittedBy,
+  external_id: item.externalId,
 });
 
 export interface FetchNewsOptions {

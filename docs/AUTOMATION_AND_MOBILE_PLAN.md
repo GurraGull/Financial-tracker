@@ -200,6 +200,72 @@ Recommended rule:
 - agents can write drafts
 - humans approve anything that changes trusted market data
 
+## Agent Upload Contract
+
+PM Terminal now has a secure draft-ingest endpoint:
+
+- `POST /api/agent/news-ingest`
+
+Authentication:
+
+- send `Authorization: Bearer <AGENT_NEWS_INGEST_TOKEN>`
+
+Required server env:
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `AGENT_NEWS_INGEST_TOKEN`
+
+### Single item payload
+
+```json
+{
+  "company_id": "anthropic",
+  "title": "Anthropic discussing new financing at higher valuation",
+  "link": "https://example.com/article",
+  "source": "Financial Times",
+  "summary": "Anthropic is reportedly discussing a new financing round at a higher implied valuation.",
+  "tag": "valuation",
+  "published_at": "2026-05-07T08:30:00Z",
+  "external_id": "ft-anthropic-2026-05-07",
+  "submitted_by": "chatgpt-agent"
+}
+```
+
+### Batch payload
+
+```json
+{
+  "items": [
+    {
+      "company_id": "anthropic",
+      "title": "Anthropic discussing new financing at higher valuation",
+      "link": "https://example.com/article",
+      "source": "Financial Times",
+      "summary": "Anthropic is reportedly discussing a new financing round at a higher implied valuation.",
+      "tag": "valuation",
+      "published_at": "2026-05-07T08:30:00Z",
+      "external_id": "ft-anthropic-2026-05-07",
+      "submitted_by": "chatgpt-agent"
+    }
+  ]
+}
+```
+
+Behavior:
+
+- inserts as draft with `is_published = false`
+- sets `submission_source = 'agent'`
+- dedupes on `external_id` when present
+- otherwise dedupes on `company_id + link`
+- rejects unknown `company_id`
+
+Review flow:
+
+- agent submits draft
+- admin sees it in News Manager
+- admin edits/approves by setting `Published`
+- only published items appear in the live intelligence feed
+
 ## iPhone App Path
 
 ### Phase 1: PWA first

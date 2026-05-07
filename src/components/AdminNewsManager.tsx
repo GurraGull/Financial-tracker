@@ -19,6 +19,9 @@ type DraftNews = {
   tag: string;
   publishedAt: string;
   isPublished: boolean;
+  submissionSource: string;
+  submittedBy: string;
+  externalId: string;
 };
 
 const TAGS = ['general', 'funding', 'valuation', 'secondary', 'arr', 'ipo'];
@@ -34,6 +37,9 @@ function makeDraft(): DraftNews {
     tag: 'general',
     publishedAt: new Date().toISOString().slice(0, 16),
     isPublished: true,
+    submissionSource: 'manual',
+    submittedBy: '',
+    externalId: '',
   };
 }
 
@@ -90,6 +96,9 @@ export default function AdminNewsManager({ companies, onToast }: Props) {
       tag: item.tag,
       publishedAt: item.publishedAt.slice(0, 16),
       isPublished: item.isPublished,
+      submissionSource: item.submissionSource,
+      submittedBy: item.submittedBy,
+      externalId: item.externalId,
     });
   };
 
@@ -113,6 +122,9 @@ export default function AdminNewsManager({ companies, onToast }: Props) {
       tag: draft.tag,
       publishedAt: new Date(draft.publishedAt || new Date().toISOString()).toISOString(),
       isPublished: draft.isPublished,
+      submissionSource: draft.submissionSource || 'manual',
+      submittedBy: draft.submittedBy.trim(),
+      externalId: draft.externalId.trim(),
     });
     if (err) {
       onToast(err, false);
@@ -136,6 +148,34 @@ export default function AdminNewsManager({ companies, onToast }: Props) {
     setItems((prev) => prev.filter((item) => item.id !== id));
     if (draft.id === id) resetDraft();
     onToast('News item deleted');
+  };
+
+  const handleQuickPublish = async (item: NewsItemRecord) => {
+    const err = await saveNewsItem({
+      id: item.id,
+      companyId: item.companyId,
+      title: item.title,
+      link: item.link,
+      source: item.source,
+      summary: item.summary,
+      tag: item.tag,
+      publishedAt: item.publishedAt,
+      isPublished: true,
+      submissionSource: item.submissionSource,
+      submittedBy: item.submittedBy,
+      externalId: item.externalId,
+    });
+
+    if (err) {
+      onToast(err, false);
+      return;
+    }
+
+    setItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, isPublished: true } : row)));
+    if (draft.id === item.id) {
+      setDraft((prev) => ({ ...prev, isPublished: true }));
+    }
+    onToast('News item published');
   };
 
   return (
@@ -190,6 +230,18 @@ export default function AdminNewsManager({ companies, onToast }: Props) {
             <div className="pm-fl">Published At</div>
             <input className="pm-fi" type="datetime-local" value={draft.publishedAt} onChange={(e) => setDraft((d) => ({ ...d, publishedAt: e.target.value }))} />
           </div>
+          <div className="pm-fg">
+            <div className="pm-fl">Submission Source</div>
+            <input className="pm-fi" value={draft.submissionSource} onChange={(e) => setDraft((d) => ({ ...d, submissionSource: e.target.value }))} />
+          </div>
+          <div className="pm-fg">
+            <div className="pm-fl">Submitted By</div>
+            <input className="pm-fi" value={draft.submittedBy} onChange={(e) => setDraft((d) => ({ ...d, submittedBy: e.target.value }))} />
+          </div>
+          <div className="pm-fg">
+            <div className="pm-fl">External ID</div>
+            <input className="pm-fi" value={draft.externalId} onChange={(e) => setDraft((d) => ({ ...d, externalId: e.target.value }))} />
+          </div>
           <div className="pm-fg" style={{ gridColumn: '1 / -2' }}>
             <div className="pm-fl">Summary</div>
             <input className="pm-fi" value={draft.summary} onChange={(e) => setDraft((d) => ({ ...d, summary: e.target.value }))} />
@@ -238,13 +290,23 @@ export default function AdminNewsManager({ companies, onToast }: Props) {
             >
               <div>
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--txt)' }}>{item.title}</div>
-                <div style={{ fontSize: 10, color: 'var(--txt3)', marginTop: 2 }}>{item.source}{item.link ? ` · ${item.link}` : ''}</div>
+                <div style={{ fontSize: 10, color: 'var(--txt3)', marginTop: 2 }}>
+                  {item.source}
+                  {item.link ? ` · ${item.link}` : ''}
+                  {item.submissionSource ? ` · ${item.submissionSource}` : ''}
+                  {item.submittedBy ? ` · ${item.submittedBy}` : ''}
+                </div>
               </div>
               <div style={{ fontSize: 11, color: 'var(--txt2)' }}>{company?.name ?? item.companyId}</div>
               <div style={{ fontSize: 10, color: 'var(--txt3)' }}>{item.tag}</div>
               <div style={{ fontSize: 10, color: 'var(--txt3)' }}>{new Date(item.publishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <span style={{ fontSize: 10, color: item.isPublished ? 'var(--green)' : 'var(--txt3)' }}>{item.isPublished ? 'Live' : 'Draft'}</span>
+                {!item.isPublished && (
+                  <button className="pm-btn pri" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => handleQuickPublish(item)}>
+                    Approve
+                  </button>
+                )}
                 <button className="pm-btn" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => editItem(item)}>Edit</button>
                 <button className="pm-btn danger" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => handleDelete(item.id)}>Delete</button>
               </div>
