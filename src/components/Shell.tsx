@@ -5,8 +5,7 @@ import type { User } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import { dbLoad, dbUpsert, dbDelete } from '@/lib/db';
 import { StoredPosition, DerivedPosition, derivePosition, loadPositions, savePositions } from '@/lib/positions';
-import { Company, COMPANIES } from '@/lib/companies';
-import { fetchCompanies } from '@/lib/companies-db';
+import { useLiveCompanies } from '@/lib/useLiveCompanies';
 import SummaryStrip from './SummaryStrip';
 import PositionsTable from './PositionsTable';
 import CardsView from './CardsView';
@@ -39,12 +38,7 @@ export default function Shell() {
   const [sort, setSort] = useState<SortState>({ key: 'currentValue', dir: -1 });
   const [modal, setModal] = useState<{ open: boolean; editing: StoredPosition | null }>({ open: false, editing: null });
   const [tick, setTick] = useState(new Date());
-  const [companies, setCompanies] = useState<Company[]>(COMPANIES);
-
-  /* fetch live company data from DB */
-  useEffect(() => {
-    fetchCompanies().then(({ companies: rows }) => { if (rows.length) setCompanies(rows); });
-  }, []);
+  const { companies, live, lastUpdate } = useLiveCompanies();
 
   /* auth bootstrap */
   useEffect(() => {
@@ -225,6 +219,13 @@ export default function Shell() {
             ))}
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              title={lastUpdate ? `Data updated ${lastUpdate.toLocaleTimeString()}` : 'Waiting for data…'}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: live ? 'var(--green)' : 'var(--txt3)', padding: '4px 8px', background: live ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.04)', borderRadius: 6, border: `1px solid ${live ? 'rgba(16,185,129,0.25)' : 'var(--div)'}` }}
+            >
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: live ? 'var(--green)' : 'var(--txt3)', boxShadow: live ? '0 0 6px rgba(16,185,129,0.8)' : 'none', display: 'inline-block' }} />
+              {live ? 'Live' : 'Polling'}
+            </span>
             {!user && !hasSupabase() && <span style={{ fontSize: 9, color: 'var(--txt3)', padding: '4px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, border: '1px solid var(--div)' }}>localStorage mode</span>}
             {derived.length > 0 && <button className="pm-btn" onClick={handleExportCSV}>Export CSV</button>}
             <button className="pm-btn pri" onClick={() => setModal({ open: true, editing: null })}>+ Add Position</button>
