@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 
 // ── Slug maps ─────────────────────────────────────────────────────────────────
 // Forge:  https://forgeglobal.com/{slug}_stock/
@@ -150,45 +149,16 @@ async function scrapeCompany(companyId: string): Promise<SourceResult> {
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
-
-  const sb = createClient(url, key, { global: { headers: { authorization: authHeader } } });
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
   const body = await req.json().catch(() => ({}));
   const ids: string[] = body.companyIds ?? Object.keys(FORGE_SLUGS);
 
   const results: Record<string, SourceResult> = {};
-  const saved: string[] = [];
 
-  // Scrape 3 at a time
   for (let i = 0; i < ids.length; i += 3) {
     const chunk = ids.slice(i, i + 3);
-    await Promise.all(chunk.map(async (id) => {
-      results[id] = await scrapeCompany(id);
-    }));
+    await Promise.all(chunk.map(async (id) => { results[id] = await scrapeCompany(id); }));
     if (i + 3 < ids.length) await new Promise((r) => setTimeout(r, 600));
   }
 
-  // Persist to secondary_prices
-  for (const [companyId, prices] of Object.entries(results)) {
-    for (const [source, price] of Object.entries(prices) as [string, number | null][]) {
-      if (price === null) continue;
-      const { error } = await sb.from('secondary_prices').insert({
-        company_id: companyId,
-        source,
-        price,
-        notes: `auto-scraped from ${source}`,
-      });
-      if (!error) saved.push(`${companyId}:${source}`);
-    }
-  }
-
-  return NextResponse.json({ results, saved, total: saved.length });
+  return NextResponse.json({ results });
 }

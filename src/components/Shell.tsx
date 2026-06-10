@@ -1,11 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import type { User } from '@supabase/supabase-js';
-import { getSupabase } from '@/lib/supabase';
-import { dbLoad, dbUpsert, dbDelete } from '@/lib/db';
 import { StoredPosition, DerivedPosition, derivePosition, loadPositions, savePositions } from '@/lib/positions';
-import { useLiveCompanies } from '@/lib/useLiveCompanies';
+import { COMPANIES } from '@/lib/companies';
 import SummaryStrip from './SummaryStrip';
 import PositionsTable from './PositionsTable';
 import CardsView from './CardsView';
@@ -13,137 +10,80 @@ import SidePanel from './SidePanel';
 import AddPositionModal from './AddPositionModal';
 import IntelligencePanel from './IntelligencePanel';
 import ChartsView from './ChartsView';
-import AuthModal from './AuthModal';
-
-const NAV = [
-  { icon: '⊞', label: 'Overview' },
-  { icon: '◈', label: 'Companies' },
-  { icon: '◎', label: 'Portfolio', on: true },
-  { icon: '✎', label: 'Notes', badge: true },
-  { icon: '◉', label: 'Intelligence' },
-];
 
 type View = 'table' | 'cards' | 'charts' | 'intelligence';
 interface SortState { key: string; dir: number; }
 
-const hasSupabase = () => !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
 export default function Shell() {
-  const [user, setUser] = useState<User | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
   const [positions, setPositions] = useState<StoredPosition[]>([]);
+  const [ready, setReady] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [view, setView] = useState<View>('table');
   const [sort, setSort] = useState<SortState>({ key: 'currentValue', dir: -1 });
   const [modal, setModal] = useState<{ open: boolean; editing: StoredPosition | null }>({ open: false, editing: null });
   const [tick, setTick] = useState(new Date());
-  const { companies, live, lastUpdate } = useLiveCompanies();
 
-  /* auth bootstrap */
+  /* load from localStorage on mount */
   useEffect(() => {
-    const sb = getSupabase();
-    if (!sb) {
-      setAuthChecked(true);
-      setPositions(loadPositions());
-      return;
-    }
-    sb.auth.getSession().then(({ data, error }) => {
-      if (error) {
-        setAuthChecked(true);
-        setPositions(loadPositions());
-        return;
-      }
-      const u = data.session?.user ?? null;
-      setUser(u);
-      setAuthChecked(true);
-      if (!u) setShowAuth(true);
-    }).catch(() => {
-      setAuthChecked(true);
-      setPositions(loadPositions());
-    });
-    let subscription: { unsubscribe: () => void } | null = null;
-    try {
-      const { data } = sb.auth.onAuthStateChange((_ev, session) => {
-        const u = session?.user ?? null;
-        setUser(u);
-        if (!u) { setShowAuth(true); setPositions([]); }
-      });
-      subscription = data.subscription;
-    } catch { /* ignore */ }
-    return () => subscription?.unsubscribe();
+    setPositions(loadPositions());
+    setReady(true);
   }, []);
 
-  /* load positions when user known */
-  useEffect(() => {
-    if (!authChecked) return;
-    if (user) {
-      dbLoad(user.id).then(setPositions);
-    } else if (!getSupabase()) {
-      setPositions(loadPositions());
-    }
-  }, [user, authChecked]);
-
   /* clock */
-  useEffect(() => { const t = setInterval(() => setTick(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    const t = setInterval(() => setTick(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const rawTotalCurr = positions.reduce((s, p) => {
-    const liveVal = companies.find((c) => c.id === p.companyId)?.currentValuationM ?? p.currentValuationM;
+    const liveVal = COMPANIES.find((c) => c.id === p.companyId)?.currentValuationM ?? p.currentValuationM;
     const curr = (liveVal / p.entryValuationM) * p.entrySharePrice;
     return s + p.shares * curr;
   }, 0);
 
   const derived: DerivedPosition[] = useMemo(() => {
-    const all = positions.map((p) => derivePosition(p, rawTotalCurr, companies));
+    const all = positions.map((p) => derivePosition(p, rawTotalCurr, COMPANIES));
     return all.sort((a, b) => {
       const av = a[sort.key as keyof DerivedPosition] as number;
       const bv = b[sort.key as keyof DerivedPosition] as number;
       return (bv - av) * sort.dir;
     });
-  }, [positions, sort, rawTotalCurr, companies]);
+  }, [positions, sort, rawTotalCurr]);
 
   const totalCost = derived.reduce((s, p) => s + p.costBasis, 0);
   const totalCurr = derived.reduce((s, p) => s + p.currentValue, 0);
-  const totalSec = derived.reduce((s, p) => s + p.secondaryValue, 0);
-  const totalPL = totalCurr - totalCost;
+  const totalSec  = derived.reduce((s, p) => s + p.secondaryValue, 0);
+  const totalPL   = totalCurr - totalCost;
   const totalPLpct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
   const avgMultiple = totalCost > 0 ? totalCurr / totalCost : 1;
   const gainers = derived.filter((p) => p.unrealizedPL > 0).length;
+  const companyIds = [...new Set(derived.map((p) => p.companyId))];
 
-  const handleSort = (key: string) => setSort((s) => ({ key, dir: s.key === key ? s.dir * -1 : -1 }));
-  const handleExpand = (id: string) => setExpanded((e) => (e === id ? null : id));
+  const handleSort   = (key: string) => setSort((s) => ({ key, dir: s.key === key ? s.dir * -1 : -1 }));
+  const handleExpand = (id: string)  => setExpanded((e) => (e === id ? null : id));
 
-  const handleSave = async (pos: StoredPosition) => {
-    const next = modal.editing
+  const persist = (next: StoredPosition[]) => {
+    setPositions(next);
+    savePositions(next);
+  };
+
+  const handleSave = (pos: StoredPosition) => {
+    persist(modal.editing
       ? positions.map((p) => (p.id === pos.id ? pos : p))
-      : [...positions, pos];
-    setPositions(next);
-    if (user) { await dbUpsert(user.id, pos); }
-    else { savePositions(next); }
+      : [...positions, pos]);
   };
 
-  const handleRemove = async (id: string) => {
-    const next = positions.filter((p) => p.id !== id);
-    setPositions(next);
+  const handleRemove = (id: string) => {
+    persist(positions.filter((p) => p.id !== id));
     setExpanded(null);
-    if (user) { await dbDelete(user.id, id); }
-    else { savePositions(next); }
-  };
-
-  const handleSignOut = async () => {
-    const sb = getSupabase();
-    if (sb) await sb.auth.signOut();
-    setUser(null);
-    setPositions([]);
-    setShowAuth(true);
   };
 
   const handleExportCSV = () => {
     if (!derived.length) return;
-    const headers = ['Company', 'Ticker', 'Sector', 'Shares', 'Entry Price ($)', 'Entry Valuation ($M)', 'Cost Basis ($)', 'Current Value ($)', 'Secondary Value ($)', 'Unrealized P&L ($)', 'Return (%)', 'MOIC', 'Annualized IRR (%)', 'Allocation (%)', 'Days Held', 'Entry Date', 'Notes'];
+    const headers = ['Company','Ticker','Sector','Shares','Entry Price ($)','Entry Valuation ($M)','Cost Basis ($)','Current Value ($)','Secondary Value ($)','Unrealized P&L ($)','Return (%)','MOIC','IRR (%)','Allocation (%)','Days Held','Entry Date','Notes'];
     const rows = derived.map((p) => [
-      p.name, p.ticker, p.sector,
-      p.shares, p.entrySharePrice.toFixed(2), p.entryValuationM,
+      p.name, p.ticker, p.sector, p.shares,
+      p.entrySharePrice.toFixed(2), p.entryValuationM,
       p.costBasis.toFixed(2), p.currentValue.toFixed(2), p.secondaryValue.toFixed(2),
       p.unrealizedPL.toFixed(2), p.unrealizedPct.toFixed(2), p.multiple.toFixed(4),
       p.annualizedRet.toFixed(2), p.allocation.toFixed(2), p.days, p.entryDate,
@@ -151,22 +91,41 @@ export default function Shell() {
     ]);
     const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `pm-terminal-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: `pm-terminal-${new Date().toISOString().slice(0,10)}.csv` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  const ts = tick.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  const dateStr = tick.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  const companyIds = [...new Set(derived.map((p) => p.companyId))];
-  const userInitial = user?.email?.[0]?.toUpperCase() ?? 'A';
+  const handleExportJSON = () => {
+    const blob = new Blob([JSON.stringify(positions, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: `pm-terminal-backup-${new Date().toISOString().slice(0,10)}.json` });
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
-  if (!authChecked) {
+  const handleImportJSON = () => {
+    const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.json' });
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target?.result as string);
+          if (Array.isArray(data)) persist(data);
+        } catch { /* bad file */ }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const ts      = tick.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const dateStr = tick.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  if (!ready) {
     return (
       <>
         <div className="pm-bg" />
@@ -184,25 +143,31 @@ export default function Shell() {
     <>
       <div className="pm-bg" />
       <div className="pm-shell">
+
         {/* RAIL */}
         <aside className="pm-rail">
           <div className="pm-logo">PM</div>
           <div className="pm-sep" />
-          {NAV.map((item) => (
-            <div key={item.label} className={`pm-ri ${item.on ? 'on' : ''}`}>
+          {[
+            { icon: '◎', label: 'Portfolio' },
+            { icon: '◉', label: 'Intelligence' },
+            { icon: '⊞', label: 'Charts' },
+          ].map((item) => (
+            <div key={item.label} className="pm-ri">
               {item.icon}
-              {item.badge && <div className="pm-rb" />}
               <div className="pm-tip">{item.label}</div>
             </div>
           ))}
           <div className="pm-rail-foot">
             <div className="pm-sep" />
-            <div className="pm-ri" onClick={handleSignOut} title="Sign Out">
-              <span style={{ fontSize: 13 }}>⎋</span>
-              <div className="pm-tip">Sign Out</div>
+            <div className="pm-ri" onClick={handleExportJSON} title="Backup">
+              <span style={{ fontSize: 13 }}>↓</span>
+              <div className="pm-tip">Backup JSON</div>
             </div>
-            <div className="pm-sep" />
-            <div className="pm-av" title={user?.email}>{userInitial}</div>
+            <div className="pm-ri" onClick={handleImportJSON} title="Restore">
+              <span style={{ fontSize: 13 }}>↑</span>
+              <div className="pm-tip">Restore JSON</div>
+            </div>
           </div>
         </aside>
 
@@ -210,23 +175,17 @@ export default function Shell() {
         <header className="pm-topbar">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <div className="pm-tb-title">Portfolio Terminal</div>
-            <div className="pm-tb-sub">{dateStr} · {ts}{user ? ` · ${user.email}` : ''}</div>
+            <div className="pm-tb-sub">{dateStr} · {ts}</div>
           </div>
           <div className="pm-tb-div" />
           <div className="pm-vtabs">
-            {([['table', 'Table'], ['cards', 'Cards'], ['charts', 'Charts'], ['intelligence', 'Intelligence']] as [View, string][]).map(([k, l]) => (
-              <div key={k} className={`pm-vtab ${view === k ? 'on' : ''}`} onClick={() => setView(k)}>{l}</div>
+            {(['table','cards','charts','intelligence'] as View[]).map((k) => (
+              <div key={k} className={`pm-vtab ${view === k ? 'on' : ''}`} onClick={() => setView(k)}>
+                {k.charAt(0).toUpperCase() + k.slice(1)}
+              </div>
             ))}
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              title={lastUpdate ? `Data updated ${lastUpdate.toLocaleTimeString()}` : 'Waiting for data…'}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: live ? 'var(--green)' : 'var(--txt3)', padding: '4px 8px', background: live ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.04)', borderRadius: 6, border: `1px solid ${live ? 'rgba(16,185,129,0.25)' : 'var(--div)'}` }}
-            >
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: live ? 'var(--green)' : 'var(--txt3)', boxShadow: live ? '0 0 6px rgba(16,185,129,0.8)' : 'none', display: 'inline-block' }} />
-              {live ? 'Live' : 'Polling'}
-            </span>
-            {!user && !hasSupabase() && <span style={{ fontSize: 9, color: 'var(--txt3)', padding: '4px 8px', background: 'rgba(255,255,255,0.04)', borderRadius: 6, border: '1px solid var(--div)' }}>localStorage mode</span>}
             {derived.length > 0 && <button className="pm-btn" onClick={handleExportCSV}>Export CSV</button>}
             <button className="pm-btn pri" onClick={() => setModal({ open: true, editing: null })}>+ Add Position</button>
           </div>
@@ -250,16 +209,9 @@ export default function Shell() {
               onAdd={() => setModal({ open: true, editing: null })}
             />
           )}
-          {view === 'cards' && <CardsView positions={derived} onAdd={() => setModal({ open: true, editing: null })} />}
-          {view === 'charts' && <ChartsView positions={derived} />}
+          {view === 'cards'        && <CardsView positions={derived} onAdd={() => setModal({ open: true, editing: null })} />}
+          {view === 'charts'       && <ChartsView positions={derived} />}
           {view === 'intelligence' && <IntelligencePanel companyIds={companyIds} />}
-
-          <div style={{ display: 'none' }} className="pm-mobile-stats">
-            <SidePanel
-              positions={derived} totalCost={totalCost} totalCurr={totalCurr} totalSec={totalSec}
-              totalPL={totalPL} totalPLpct={totalPLpct} avgMultiple={avgMultiple} gainers={gainers}
-            />
-          </div>
         </main>
 
         <SidePanel
@@ -268,19 +220,10 @@ export default function Shell() {
         />
       </div>
 
-      {showAuth && !user && (
-        <AuthModal onAuthed={() => {
-          setShowAuth(false);
-          getSupabase()?.auth.getSession().then(({ data }) => {
-            if (data.session?.user) setUser(data.session.user);
-          });
-        }} />
-      )}
-
       {modal.open && (
         <AddPositionModal
           initial={modal.editing}
-          companies={companies}
+          companies={COMPANIES}
           onClose={() => setModal({ open: false, editing: null })}
           onSave={handleSave}
         />
